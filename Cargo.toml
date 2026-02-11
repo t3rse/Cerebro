@@ -1,0 +1,12 @@
+[package]
+name = "Cerebro"
+version = "0.1.0"
+edition = "2024"
+
+[workspace]
+members = ["headset"]
+
+[dependencies]
+dotenvy = "0.15.7"
+headset = { path = "headset" }
+tokio = { version = "1", features = ["full"] }
