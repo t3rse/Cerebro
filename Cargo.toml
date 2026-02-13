@@ -7,6 +7,9 @@ edition = "2024"
 members = ["headset"]
 
 [dependencies]
+crossterm = { version = "0.28", features = ["event-stream"] }
 dotenvy = "0.15.7"
+futures = "0.3"
 headset = { path = "headset" }
+ratatui = "0.30.0"
 tokio = { version = "1", features = ["full"] }

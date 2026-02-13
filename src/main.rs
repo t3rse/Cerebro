@@ -1,4 +1,14 @@
+mod app;
+mod event;
+mod ui;
+
+use std::time::Duration;
+
+use crossterm::event::KeyCode;
 use headset::Headset;
+
+use app::App;
+use event::{Event, EventHandler};
 
 #[tokio::main]
 async fn main() {
@@ -12,35 +22,36 @@ async fn main() {
         }
     };
 
-    // Fetch a real-time quote for AAPL
-    match client.quote("AAPL").await {
-        Ok(q) => {
-            println!("--- Quote for {} ---", q.symbol);
-            println!("  Price:    ${:.2}", q.current_price);
-            println!("  Change:   {:.2} ({:.2}%)", q.change, q.percent_change);
-            println!("  High:     ${:.2}", q.high);
-            println!("  Low:      ${:.2}", q.low);
-            println!("  Open:     ${:.2}", q.open);
-            println!("  Prev Close: ${:.2}", q.previous_close);
+    let mut app = App::new();
+
+    // Fetch data before entering the TUI
+    if let Ok(q) = client.quote("DIA").await {
+        app.quote = Some(q);
+    }
+    if let Ok(reports) = client.earnings(None, None, None).await {
+        app.earnings = reports;
+    }
+    app.loading = false;
+
+    let mut terminal = ratatui::init();
+    let mut events = EventHandler::new(Duration::from_millis(250), Duration::from_millis(33));
+
+    while !app.should_quit {
+        match events.next().await {
+            Some(Event::Key(key)) => {
+                if key.code == KeyCode::Char('q') {
+                    app.should_quit = true;
+                }
+            }
+            Some(Event::Render) => {
+                terminal
+                    .draw(|frame| ui::render(frame, &app))
+                    .expect("failed to draw frame");
+            }
+            Some(Event::Tick) => {}
+            None => break,
         }
-        Err(e) => eprintln!("Quote error: {e}"),
     }
 
-    // Fetch upcoming earnings calendar
-    match client.earnings(None, None, None).await {
-        Ok(reports) => {
-            println!("\n--- Upcoming Earnings ({} entries) ---", reports.len());
-            for r in reports.iter().take(10) {
-                println!(
-                    "  {} | {} | Q{} {} | EPS est: {:?}",
-                    r.symbol.as_deref().unwrap_or("???"),
-                    r.date.as_deref().unwrap_or("n/a"),
-                    r.quarter.unwrap_or(0),
-                    r.year.unwrap_or(0),
-                    r.eps_estimate,
-                );
-            }
-        }
-        Err(e) => eprintln!("Earnings error: {e}"),
-    }
+    ratatui::restore();
 }
