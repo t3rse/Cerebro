@@ -1,7 +1,7 @@
 use headset::{EarningsReport, StockQuote};
 
 pub struct App {
-    pub quote: Option<StockQuote>,
+    pub quotes: Vec<StockQuote>,
     pub earnings: Vec<EarningsReport>,
     pub should_quit: bool,
     pub loading: bool,
@@ -10,7 +10,7 @@ pub struct App {
 impl App {
     pub fn new() -> Self {
         Self {
-            quote: None,
+            quotes: Vec::new(),
             earnings: Vec::new(),
             should_quit: false,
             loading: true,

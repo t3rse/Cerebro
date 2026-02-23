@@ -29,7 +29,7 @@ pub fn render(frame: &mut Frame, app: &App) {
         ])
         .split(outer[1]);
 
-        render_quote_panel(frame, app, content[0]);
+        render_quotes_table(frame, app, content[0]);
         render_earnings_table(frame, app, content[1]);
     }
 
@@ -58,13 +58,27 @@ fn render_status_bar(frame: &mut Frame, area: ratatui::layout::Rect) {
     frame.render_widget(status, area);
 }
 
-fn render_quote_panel(frame: &mut Frame, app: &App, area: ratatui::layout::Rect) {
-    let block = Block::default()
-        .title(" Stock Quote ")
-        .borders(Borders::ALL);
+fn render_quotes_table(frame: &mut Frame, app: &App, area: ratatui::layout::Rect) {
+    let header = Row::new(vec![
+        Cell::from("Symbol"),
+        Cell::from("Price"),
+        Cell::from("Change"),
+        Cell::from("% Change"),
+        Cell::from("High"),
+        Cell::from("Low"),
+        Cell::from("Open"),
+        Cell::from("Prev Close"),
+    ])
+    .style(
+        Style::default()
+            .fg(Color::Yellow)
+            .add_modifier(Modifier::BOLD),
+    );
 
-    let content = match &app.quote {
-        Some(q) => {
+    let rows: Vec<Row> = app
+        .quotes
+        .iter()
+        .map(|q| {
             let change_color = if q.change >= 0.0 {
                 Color::Green
             } else {
@@ -72,41 +86,46 @@ fn render_quote_panel(frame: &mut Frame, app: &App, area: ratatui::layout::Rect)
             };
             let change_sign = if q.change >= 0.0 { "+" } else { "" };
 
-            vec![
-                Line::from(vec![
-                    Span::styled(
-                        format!(" {} ", q.symbol),
-                        Style::default()
-                            .fg(Color::Cyan)
-                            .add_modifier(Modifier::BOLD),
-                    ),
-                ]),
-                Line::from(""),
-                Line::from(vec![
-                    Span::raw("  Price:      "),
-                    Span::styled(
-                        format!("${:.2}", q.current_price),
-                        Style::default().add_modifier(Modifier::BOLD),
-                    ),
-                ]),
-                Line::from(vec![
-                    Span::raw("  Change:     "),
-                    Span::styled(
-                        format!("{}{:.2} ({}{:.2}%)", change_sign, q.change, change_sign, q.percent_change),
-                        Style::default().fg(change_color),
-                    ),
-                ]),
-                Line::from(format!("  High:       ${:.2}", q.high)),
-                Line::from(format!("  Low:        ${:.2}", q.low)),
-                Line::from(format!("  Open:       ${:.2}", q.open)),
-                Line::from(format!("  Prev Close: ${:.2}", q.previous_close)),
-            ]
-        }
-        None => vec![Line::from("  No quote data available")],
-    };
+            Row::new(vec![
+                Cell::from(q.symbol.clone()).style(
+                    Style::default()
+                        .fg(Color::Cyan)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Cell::from(format!("${:.2}", q.current_price)),
+                Cell::from(format!("{}{:.2}", change_sign, q.change))
+                    .style(Style::default().fg(change_color)),
+                Cell::from(format!("{}{:.2}%", change_sign, q.percent_change))
+                    .style(Style::default().fg(change_color)),
+                Cell::from(format!("${:.2}", q.high)),
+                Cell::from(format!("${:.2}", q.low)),
+                Cell::from(format!("${:.2}", q.open)),
+                Cell::from(format!("${:.2}", q.previous_close)),
+            ])
+        })
+        .collect();
 
-    let paragraph = Paragraph::new(content).block(block);
-    frame.render_widget(paragraph, area);
+    let widths = [
+        Constraint::Length(8),
+        Constraint::Length(10),
+        Constraint::Length(10),
+        Constraint::Length(10),
+        Constraint::Length(10),
+        Constraint::Length(10),
+        Constraint::Length(10),
+        Constraint::Length(12),
+    ];
+
+    let table = Table::new(rows, widths)
+        .header(header)
+        .block(
+            Block::default()
+                .title(" Stock Quotes ")
+                .borders(Borders::ALL),
+        )
+        .row_highlight_style(Style::default().add_modifier(Modifier::BOLD));
+
+    frame.render_widget(table, area);
 }
 
 fn render_earnings_table(frame: &mut Frame, app: &App, area: ratatui::layout::Rect) {

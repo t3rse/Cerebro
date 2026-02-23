@@ -25,8 +25,10 @@ async fn main() {
     let mut app = App::new();
 
     // Fetch data before entering the TUI
-    if let Ok(q) = client.quote("DIA").await {
-        app.quote = Some(q);
+    for symbol in ["DIA", "SPY", "NDAQ"] {
+        if let Ok(q) = client.quote(symbol).await {
+            app.quotes.push(q);
+        }
     }
     if let Ok(reports) = client.earnings(None, None, None).await {
         app.earnings = reports;
