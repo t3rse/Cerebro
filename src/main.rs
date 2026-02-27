@@ -77,6 +77,14 @@ async fn main() {
                 KeyCode::Char('q') => app.should_quit = true,
                 KeyCode::Right => app.next_tab(),
                 KeyCode::Left => app.prev_tab(),
+                KeyCode::Down => app.focus_next(),
+                KeyCode::Up => app.focus_prev(),
+                KeyCode::Enter => {
+                    if let Some(ticker) = app.focused_ticker() {
+                        let url = format!("https://finance.yahoo.com/quote/{}/", ticker);
+                        std::process::Command::new("open").arg(&url).spawn().ok();
+                    }
+                }
                 _ => {}
             },
             Some(Event::Render) => {

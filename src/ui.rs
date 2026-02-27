@@ -3,7 +3,7 @@ use ratatui::{
     layout::{Constraint, Layout},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Cell, Paragraph, Row, Table, Tabs},
+    widgets::{Block, Borders, Cell, Paragraph, Row, Table, TableState, Tabs},
 };
 
 use crate::app::{App, TAB_TITLES};
@@ -33,7 +33,7 @@ pub fn render(frame: &mut Frame, app: &App) {
         }
     }
 
-    render_status_bar(frame, outer[3]);
+    render_status_bar(frame, app, outer[3]);
 }
 
 fn render_tabs(frame: &mut Frame, app: &App, area: ratatui::layout::Rect) {
@@ -134,9 +134,15 @@ fn render_portfolio_tab(frame: &mut Frame, app: &App, area: ratatui::layout::Rec
                 .title(format!(" {} Positions ", portfolio.portfolio_name))
                 .borders(Borders::ALL),
         )
-        .row_highlight_style(Style::default().add_modifier(Modifier::BOLD));
+        .row_highlight_style(
+            Style::default()
+                .bg(Color::DarkGray)
+                .add_modifier(Modifier::BOLD),
+        );
 
-    frame.render_widget(table, area);
+    let mut state = TableState::default();
+    state.select(app.portfolio_focus[portfolio_idx]);
+    frame.render_stateful_widget(table, area, &mut state);
 }
 
 fn render_title(frame: &mut Frame, area: ratatui::layout::Rect) {
@@ -152,14 +158,26 @@ fn render_title(frame: &mut Frame, area: ratatui::layout::Rect) {
     frame.render_widget(title, area);
 }
 
-fn render_status_bar(frame: &mut Frame, area: ratatui::layout::Rect) {
-    let status = Paragraph::new(Line::from(vec![
+fn render_status_bar(frame: &mut Frame, app: &App, area: ratatui::layout::Rect) {
+    let mut spans = vec![
         Span::styled(" q ", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
         Span::raw("quit  "),
         Span::styled(" ← → ", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
         Span::raw("switch tab"),
-    ]))
-    .block(Block::default().borders(Borders::ALL));
+    ];
+
+    if app.active_tab > 0 {
+        spans.extend([
+            Span::raw("  "),
+            Span::styled(" ↑ ↓ ", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+            Span::raw("select position  "),
+            Span::styled(" Enter ", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+            Span::raw("open in browser"),
+        ]);
+    }
+
+    let status = Paragraph::new(Line::from(spans))
+        .block(Block::default().borders(Borders::ALL));
     frame.render_widget(status, area);
 }
 
