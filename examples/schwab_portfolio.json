@@ -1,0 +1,24 @@
+{
+  "portfolio_name": "Schwab",
+  "location": {
+    "type": "brokerage",
+    "name": "Charles Schwab",
+    "url": "https://www.schwab.com/"
+  },
+  "positions": [
+    {
+      "ticker": "MSFT",
+      "quantity": 8,
+      "cost_basis": 318.45,
+      "purchase_date": "2023-06-15",
+      "currency": "USD"
+    },
+    {
+      "ticker": "WMT",
+      "quantity": 25,
+      "cost_basis": 58.72,
+      "purchase_date": "2023-09-20",
+      "currency": "USD"
+    }
+  ]
+}

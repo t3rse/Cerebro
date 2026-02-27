@@ -1,0 +1,23 @@
+{
+  "portfolio_name": "Fide",
+  "location": {
+    "type": "brokerage",
+    "name": "Fidelity",
+    "url": "https://www.fidelity.com/"
+  },
+  "positions": [
+    {
+      "ticker": "AAPL",
+      "quantity": 10,
+      "cost_basis": 145.23,
+      "purchase_date": "2024-01-12",
+      "currency": "USD"
+    },
+    {
+      "ticker": "VOO",
+      "quantity": 5,
+      "cost_basis": 402.11,
+      "purchase_date": "2023-11-02"
+    }
+  ]
+}

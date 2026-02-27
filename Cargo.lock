@@ -11,6 +11,8 @@ dependencies = [
  "futures",
  "headset",
  "ratatui",
+ "serde",
+ "serde_json",
  "tokio",
 ]
 
