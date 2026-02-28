@@ -94,17 +94,19 @@ fn render_placeholder(frame: &mut Frame, app: &App, area: ratatui::layout::Rect)
 }
 
 fn render_indices_tab(frame: &mut Frame, app: &App, area: ratatui::layout::Rect) {
-    let content = Layout::horizontal([
-        Constraint::Percentage(35),
-        Constraint::Percentage(65),
-    ])
-    .split(area);
+    let content =
+        Layout::horizontal([Constraint::Percentage(35), Constraint::Percentage(65)]).split(area);
 
     render_quotes_table(frame, app, content[0]);
     render_earnings_table(frame, app, content[1]);
 }
 
-fn render_portfolio_tab(frame: &mut Frame, app: &App, area: ratatui::layout::Rect, portfolio_idx: usize) {
+fn render_portfolio_tab(
+    frame: &mut Frame,
+    app: &App,
+    area: ratatui::layout::Rect,
+    portfolio_idx: usize,
+) {
     let portfolio = &app.portfolios[portfolio_idx];
 
     let header = Row::new(vec![
@@ -116,41 +118,47 @@ fn render_portfolio_tab(frame: &mut Frame, app: &App, area: ratatui::layout::Rec
         Cell::from("Gain/Loss"),
         Cell::from("G/L %"),
     ])
-    .style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD));
+    .style(
+        Style::default()
+            .fg(Color::Yellow)
+            .add_modifier(Modifier::BOLD),
+    );
 
     let rows: Vec<Row> = portfolio
         .positions
         .iter()
         .map(|pos| {
             let quote = app.portfolio_quotes.get(&pos.ticker);
-            let (price_str, value_str, gl_str, gl_pct_str, gl_color) =
-                if let Some(q) = quote {
-                    let mkt_value = q.current_price * pos.quantity;
-                    let cost_total = pos.cost_basis * pos.quantity;
-                    let gl = mkt_value - cost_total;
-                    let gl_pct = (gl / cost_total) * 100.0;
-                    let color = if gl >= 0.0 { Color::Green } else { Color::Red };
-                    let sign = if gl >= 0.0 { "+" } else { "" };
-                    (
-                        format!("${:.2}", q.current_price),
-                        format!("${:.2}", mkt_value),
-                        format!("{}{:.2}", sign, gl),
-                        format!("{}{:.2}%", sign, gl_pct),
-                        color,
-                    )
-                } else {
-                    (
-                        "—".to_string(),
-                        "—".to_string(),
-                        "—".to_string(),
-                        "—".to_string(),
-                        Color::White,
-                    )
-                };
+            let (price_str, value_str, gl_str, gl_pct_str, gl_color) = if let Some(q) = quote {
+                let mkt_value = q.current_price * pos.quantity;
+                let cost_total = pos.cost_basis * pos.quantity;
+                let gl = mkt_value - cost_total;
+                let gl_pct = (gl / cost_total) * 100.0;
+                let color = if gl >= 0.0 { Color::Green } else { Color::Red };
+                let sign = if gl >= 0.0 { "+" } else { "" };
+                (
+                    format!("${:.2}", q.current_price),
+                    format!("${:.2}", mkt_value),
+                    format!("{}{:.2}", sign, gl),
+                    format!("{}{:.2}%", sign, gl_pct),
+                    color,
+                )
+            } else {
+                (
+                    "—".to_string(),
+                    "—".to_string(),
+                    "—".to_string(),
+                    "—".to_string(),
+                    Color::White,
+                )
+            };
 
             Row::new(vec![
-                Cell::from(pos.ticker.clone())
-                    .style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+                Cell::from(pos.ticker.clone()).style(
+                    Style::default()
+                        .fg(Color::Cyan)
+                        .add_modifier(Modifier::BOLD),
+                ),
                 Cell::from(format!("{:.0}", pos.quantity)),
                 Cell::from(format!("${:.2}", pos.cost_basis)),
                 Cell::from(price_str),
@@ -190,14 +198,12 @@ fn render_portfolio_tab(frame: &mut Frame, app: &App, area: ratatui::layout::Rec
 }
 
 fn render_title(frame: &mut Frame, area: ratatui::layout::Rect) {
-    let title = Paragraph::new(Line::from(vec![
-        Span::styled(
-            " CEREBRO Dashboard ",
-            Style::default()
-                .fg(Color::Cyan)
-                .add_modifier(Modifier::BOLD),
-        ),
-    ]))
+    let title = Paragraph::new(Line::from(vec![Span::styled(
+        " CEREBRO Dashboard ",
+        Style::default()
+            .fg(Color::Cyan)
+            .add_modifier(Modifier::BOLD),
+    )]))
     .block(Block::default().borders(Borders::ALL));
     frame.render_widget(title, area);
 }
@@ -206,18 +212,21 @@ fn render_status_bar(frame: &mut Frame, app: &App, area: ratatui::layout::Rect) 
     let key = |label: &'static str| {
         Span::styled(
             format!(" {label} "),
-            Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
         )
     };
 
-    let mut spans = vec![key("q"), Span::raw("quit  "), key("← →"), Span::raw("section")];
+    let mut spans = vec![
+        key("q"),
+        Span::raw("quit  "),
+        key("← →"),
+        Span::raw("section"),
+    ];
 
     if app.main_tab == 0 {
-        spans.extend([
-            Span::raw("  "),
-            key("[ ]"),
-            Span::raw("sub-tab"),
-        ]);
+        spans.extend([Span::raw("  "), key("[ ]"), Span::raw("sub-tab")]);
         if app.active_tab > 0 {
             spans.extend([
                 Span::raw("  "),
@@ -229,8 +238,7 @@ fn render_status_bar(frame: &mut Frame, app: &App, area: ratatui::layout::Rect) 
         }
     }
 
-    let status = Paragraph::new(Line::from(spans))
-        .block(Block::default().borders(Borders::ALL));
+    let status = Paragraph::new(Line::from(spans)).block(Block::default().borders(Borders::ALL));
     frame.render_widget(status, area);
 }
 
@@ -255,7 +263,11 @@ fn render_quotes_table(frame: &mut Frame, app: &App, area: ratatui::layout::Rect
         .quotes
         .iter()
         .map(|q| {
-            let change_color = if q.change >= 0.0 { Color::Green } else { Color::Red };
+            let change_color = if q.change >= 0.0 {
+                Color::Green
+            } else {
+                Color::Red
+            };
             let change_sign = if q.change >= 0.0 { "+" } else { "" };
 
             Row::new(vec![
@@ -328,7 +340,10 @@ fn render_earnings_table(frame: &mut Frame, app: &App, area: ratatui::layout::Re
                 Cell::from(r.hour.as_deref().unwrap_or("—").to_string()),
                 Cell::from(r.quarter.map_or("—".to_string(), |v| v.to_string())),
                 Cell::from(r.year.map_or("—".to_string(), |v| v.to_string())),
-                Cell::from(r.eps_estimate.map_or("—".to_string(), |v| format!("{v:.2}"))),
+                Cell::from(
+                    r.eps_estimate
+                        .map_or("—".to_string(), |v| format!("{v:.2}")),
+                ),
                 Cell::from(r.eps_actual.map_or("—".to_string(), |v| format!("{v:.2}"))),
                 Cell::from(
                     r.revenue_estimate

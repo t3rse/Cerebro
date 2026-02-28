@@ -69,9 +69,13 @@ impl App {
     }
 
     pub fn focus_next(&mut self) {
-        let Some(idx) = self.portfolio_idx() else { return };
+        let Some(idx) = self.portfolio_idx() else {
+            return;
+        };
         let len = self.portfolios[idx].positions.len();
-        if len == 0 { return; }
+        if len == 0 {
+            return;
+        }
         self.portfolio_focus[idx] = Some(match self.portfolio_focus[idx] {
             None => 0,
             Some(i) => (i + 1).min(len - 1),
@@ -79,7 +83,9 @@ impl App {
     }
 
     pub fn focus_prev(&mut self) {
-        let Some(idx) = self.portfolio_idx() else { return };
+        let Some(idx) = self.portfolio_idx() else {
+            return;
+        };
         self.portfolio_focus[idx] = match self.portfolio_focus[idx] {
             None | Some(0) => None,
             Some(i) => Some(i - 1),
@@ -89,6 +95,10 @@ impl App {
     pub fn focused_ticker(&self) -> Option<&str> {
         let idx = self.portfolio_idx()?;
         let pos_idx = self.portfolio_focus[idx]?;
-        self.portfolios.get(idx)?.positions.get(pos_idx).map(|p| p.ticker.as_str())
+        self.portfolios
+            .get(idx)?
+            .positions
+            .get(pos_idx)
+            .map(|p| p.ticker.as_str())
     }
 }

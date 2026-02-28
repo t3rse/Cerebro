@@ -30,10 +30,10 @@ async fn main() {
     let mut app = App::new();
 
     // Load portfolios from embedded JSON
-    let schwab: portfolio::Portfolio = serde_json::from_str(SCHWAB_JSON)
-        .expect("Failed to parse schwab_portfolio.json");
-    let robinhood: portfolio::Portfolio = serde_json::from_str(ROBINHOOD_JSON)
-        .expect("Failed to parse robinhood_portfolio.json");
+    let schwab: portfolio::Portfolio =
+        serde_json::from_str(SCHWAB_JSON).expect("Failed to parse schwab_portfolio.json");
+    let robinhood: portfolio::Portfolio =
+        serde_json::from_str(ROBINHOOD_JSON).expect("Failed to parse robinhood_portfolio.json");
 
     // Collect all portfolio tickers for quote fetching
     let portfolio_tickers: Vec<String> = schwab
