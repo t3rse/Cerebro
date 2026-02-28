@@ -6,37 +6,74 @@ use ratatui::{
     widgets::{Block, Borders, Cell, Paragraph, Row, Table, TableState, Tabs},
 };
 
-use crate::app::{App, TAB_TITLES};
+use crate::app::{App, MAIN_TABS, TAB_TITLES};
 
 pub fn render(frame: &mut Frame, app: &App) {
-    let outer = Layout::vertical([
-        Constraint::Length(3),
-        Constraint::Length(3),
-        Constraint::Fill(1),
-        Constraint::Length(3),
-    ])
-    .split(frame.area());
+    let on_portfolios = app.main_tab == 0;
+
+    // Build a layout that includes the sub-tabs row only under Portfolios.
+    let constraints: Vec<Constraint> = if on_portfolios {
+        vec![
+            Constraint::Length(3), // title
+            Constraint::Length(3), // main nav
+            Constraint::Length(3), // portfolio sub-tabs
+            Constraint::Fill(1),   // content
+            Constraint::Length(3), // status bar
+        ]
+    } else {
+        vec![
+            Constraint::Length(3), // title
+            Constraint::Length(3), // main nav
+            Constraint::Fill(1),   // content
+            Constraint::Length(3), // status bar
+        ]
+    };
+
+    let outer = Layout::vertical(constraints).split(frame.area());
 
     render_title(frame, outer[0]);
-    render_tabs(frame, app, outer[1]);
+    render_main_nav(frame, app, outer[1]);
 
-    if app.loading {
-        let loading = Paragraph::new("Loading data...")
-            .block(Block::default().borders(Borders::ALL));
-        frame.render_widget(loading, outer[2]);
-    } else {
-        match app.active_tab {
-            0 => render_indices_tab(frame, app, outer[2]),
-            1 => render_portfolio_tab(frame, app, outer[2], 0),
-            2 => render_portfolio_tab(frame, app, outer[2], 1),
-            _ => {}
+    if on_portfolios {
+        render_portfolio_sub_tabs(frame, app, outer[2]);
+        let content_area = outer[3];
+        let status_area = outer[4];
+        if app.loading {
+            frame.render_widget(
+                Paragraph::new("Loading data...").block(Block::default().borders(Borders::ALL)),
+                content_area,
+            );
+        } else {
+            match app.active_tab {
+                0 => render_indices_tab(frame, app, content_area),
+                1 => render_portfolio_tab(frame, app, content_area, 0),
+                2 => render_portfolio_tab(frame, app, content_area, 1),
+                _ => {}
+            }
         }
+        render_status_bar(frame, app, status_area);
+    } else {
+        let content_area = outer[2];
+        let status_area = outer[3];
+        render_placeholder(frame, app, content_area);
+        render_status_bar(frame, app, status_area);
     }
-
-    render_status_bar(frame, app, outer[3]);
 }
 
-fn render_tabs(frame: &mut Frame, app: &App, area: ratatui::layout::Rect) {
+fn render_main_nav(frame: &mut Frame, app: &App, area: ratatui::layout::Rect) {
+    let tabs = Tabs::new(MAIN_TABS.iter().copied())
+        .select(app.main_tab)
+        .block(Block::default().borders(Borders::ALL))
+        .highlight_style(
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        )
+        .style(Style::default().fg(Color::White));
+    frame.render_widget(tabs, area);
+}
+
+fn render_portfolio_sub_tabs(frame: &mut Frame, app: &App, area: ratatui::layout::Rect) {
     let tabs = Tabs::new(TAB_TITLES.iter().copied())
         .select(app.active_tab)
         .block(Block::default().borders(Borders::ALL))
@@ -47,6 +84,13 @@ fn render_tabs(frame: &mut Frame, app: &App, area: ratatui::layout::Rect) {
         )
         .style(Style::default().fg(Color::White));
     frame.render_widget(tabs, area);
+}
+
+fn render_placeholder(frame: &mut Frame, app: &App, area: ratatui::layout::Rect) {
+    let label = MAIN_TABS[app.main_tab];
+    let p = Paragraph::new(format!("{label} — coming soon"))
+        .block(Block::default().borders(Borders::ALL));
+    frame.render_widget(p, area);
 }
 
 fn render_indices_tab(frame: &mut Frame, app: &App, area: ratatui::layout::Rect) {
@@ -159,21 +203,30 @@ fn render_title(frame: &mut Frame, area: ratatui::layout::Rect) {
 }
 
 fn render_status_bar(frame: &mut Frame, app: &App, area: ratatui::layout::Rect) {
-    let mut spans = vec![
-        Span::styled(" q ", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
-        Span::raw("quit  "),
-        Span::styled(" ← → ", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
-        Span::raw("switch tab"),
-    ];
+    let key = |label: &'static str| {
+        Span::styled(
+            format!(" {label} "),
+            Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
+        )
+    };
 
-    if app.active_tab > 0 {
+    let mut spans = vec![key("q"), Span::raw("quit  "), key("← →"), Span::raw("section")];
+
+    if app.main_tab == 0 {
         spans.extend([
             Span::raw("  "),
-            Span::styled(" ↑ ↓ ", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
-            Span::raw("select position  "),
-            Span::styled(" Enter ", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
-            Span::raw("open in browser"),
+            key("[ ]"),
+            Span::raw("sub-tab"),
         ]);
+        if app.active_tab > 0 {
+            spans.extend([
+                Span::raw("  "),
+                key("↑ ↓"),
+                Span::raw("select  "),
+                key("Enter"),
+                Span::raw("open in browser"),
+            ]);
+        }
     }
 
     let status = Paragraph::new(Line::from(spans))
@@ -202,11 +255,7 @@ fn render_quotes_table(frame: &mut Frame, app: &App, area: ratatui::layout::Rect
         .quotes
         .iter()
         .map(|q| {
-            let change_color = if q.change >= 0.0 {
-                Color::Green
-            } else {
-                Color::Red
-            };
+            let change_color = if q.change >= 0.0 { Color::Green } else { Color::Red };
             let change_sign = if q.change >= 0.0 { "+" } else { "" };
 
             Row::new(vec![

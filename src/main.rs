@@ -75,8 +75,10 @@ async fn main() {
         match events.next().await {
             Some(Event::Key(key)) => match key.code {
                 KeyCode::Char('q') => app.should_quit = true,
-                KeyCode::Right => app.next_tab(),
-                KeyCode::Left => app.prev_tab(),
+                KeyCode::Right => app.next_main_tab(),
+                KeyCode::Left => app.prev_main_tab(),
+                KeyCode::Char(']') => app.next_tab(),
+                KeyCode::Char('[') => app.prev_tab(),
                 KeyCode::Down => app.focus_next(),
                 KeyCode::Up => app.focus_prev(),
                 KeyCode::Enter => {
