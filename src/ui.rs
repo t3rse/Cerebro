@@ -1,12 +1,15 @@
+use crate::app::{App, MAIN_TABS, NEWS_TABS, TAB_TITLES};
+use ratatui::text::Text;
 use ratatui::{
     Frame,
     layout::{Constraint, Layout},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Cell, List, ListItem, ListState, Paragraph, Row, Table, TableState, Tabs, Wrap},
+    widgets::{
+        Block, Borders, Cell, List, ListItem, ListState, Paragraph, Row, Table, TableState, Tabs,
+        Wrap,
+    },
 };
-
-use crate::app::{App, MAIN_TABS, NEWS_TABS, TAB_TITLES};
 
 pub fn render(frame: &mut Frame, app: &App) {
     // Portfolios (0) and News (1) both have a sub-tabs row.
@@ -106,23 +109,53 @@ fn render_news_sub_tabs(frame: &mut Frame, app: &App, area: ratatui::layout::Rec
 }
 
 fn render_news_tab(frame: &mut Frame, app: &App, area: ratatui::layout::Rect) {
-    let panes = Layout::horizontal([
-        Constraint::Percentage(35),
-        Constraint::Percentage(65),
-    ])
-    .split(area);
+    let panes =
+        Layout::horizontal([Constraint::Percentage(35), Constraint::Percentage(65)]).split(area);
 
     render_news_list(frame, app, panes[0]);
     render_news_detail(frame, app, panes[1]);
+}
+
+fn truncate(s: &str, max_chars: usize) -> String {
+    if s.chars().count() <= max_chars {
+        s.to_string()
+    } else {
+        let truncated: String = s.chars().take(max_chars.saturating_sub(1)).collect();
+        format!("{}…", truncated.trim_end())
+    }
 }
 
 fn render_news_list(frame: &mut Frame, app: &App, area: ratatui::layout::Rect) {
     let articles = &app.news_articles[app.news_tab];
     let category_label = NEWS_TABS[app.news_tab];
 
+    let inner_width = area.width.saturating_sub(4) as usize;
+
     let items: Vec<ListItem> = articles
         .iter()
-        .map(|a| ListItem::new(a.headline.clone()))
+        .map(|article| {
+            let headline = truncate(&article.headline, inner_width);
+            let meta = format!("{} · {}", article.source, relative_time(article.datetime));
+            let meta_truncated = truncate(&meta, inner_width);
+
+            // Show category badge only for non-"top news" categories
+            let category_badge = if article.category != "top news" {
+                format!(" [{}]", article.category)
+            } else {
+                String::new()
+            };
+
+            let line1 = Line::from(vec![
+                Span::styled(headline, Style::default().add_modifier(Modifier::BOLD)),
+                Span::styled(category_badge, Style::default().fg(Color::Yellow)),
+            ]);
+            let line2 = Line::from(Span::styled(
+                meta_truncated,
+                Style::default().fg(Color::DarkGray),
+            ));
+
+            ListItem::new(Text::from(vec![line1, line2, Line::from("")]))
+        })
         .collect();
 
     let list = List::new(items)
@@ -136,7 +169,7 @@ fn render_news_list(frame: &mut Frame, app: &App, area: ratatui::layout::Rect) {
                 .bg(Color::DarkGray)
                 .add_modifier(Modifier::BOLD),
         )
-        .highlight_symbol("> ");
+        .highlight_symbol("▶ ");
 
     let mut state = ListState::default();
     if !articles.is_empty() {
@@ -150,8 +183,7 @@ fn render_news_detail(frame: &mut Frame, app: &App, area: ratatui::layout::Rect)
 
     if articles.is_empty() {
         frame.render_widget(
-            Paragraph::new("No articles available.")
-                .block(Block::default().borders(Borders::ALL)),
+            Paragraph::new("No articles available.").block(Block::default().borders(Borders::ALL)),
             area,
         );
         return;

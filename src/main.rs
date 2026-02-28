@@ -126,7 +126,8 @@ async fn main() {
                 }
                 KeyCode::Char('r') if app.main_tab == 1 => {
                     let tab = app.news_tab;
-                    if let Ok(articles) = client.market_news(news_tab_to_category(tab), None).await {
+                    if let Ok(articles) = client.market_news(news_tab_to_category(tab), None).await
+                    {
                         app.news_articles[tab] = articles;
                         app.news_focus = 0;
                     }
