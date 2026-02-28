@@ -3,20 +3,20 @@ use ratatui::{
     layout::{Constraint, Layout},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Cell, Paragraph, Row, Table, TableState, Tabs},
+    widgets::{Block, Borders, Cell, List, ListItem, ListState, Paragraph, Row, Table, TableState, Tabs, Wrap},
 };
 
-use crate::app::{App, MAIN_TABS, TAB_TITLES};
+use crate::app::{App, MAIN_TABS, NEWS_TABS, TAB_TITLES};
 
 pub fn render(frame: &mut Frame, app: &App) {
-    let on_portfolios = app.main_tab == 0;
+    // Portfolios (0) and News (1) both have a sub-tabs row.
+    let has_sub_tabs = app.main_tab <= 1;
 
-    // Build a layout that includes the sub-tabs row only under Portfolios.
-    let constraints: Vec<Constraint> = if on_portfolios {
+    let constraints: Vec<Constraint> = if has_sub_tabs {
         vec![
             Constraint::Length(3), // title
             Constraint::Length(3), // main nav
-            Constraint::Length(3), // portfolio sub-tabs
+            Constraint::Length(3), // section sub-tabs
             Constraint::Fill(1),   // content
             Constraint::Length(3), // status bar
         ]
@@ -34,30 +34,36 @@ pub fn render(frame: &mut Frame, app: &App) {
     render_title(frame, outer[0]);
     render_main_nav(frame, app, outer[1]);
 
-    if on_portfolios {
-        render_portfolio_sub_tabs(frame, app, outer[2]);
-        let content_area = outer[3];
-        let status_area = outer[4];
-        if app.loading {
-            frame.render_widget(
-                Paragraph::new("Loading data...").block(Block::default().borders(Borders::ALL)),
-                content_area,
-            );
-        } else {
-            match app.active_tab {
+    let (content_area, status_area) = if has_sub_tabs {
+        match app.main_tab {
+            0 => render_portfolio_sub_tabs(frame, app, outer[2]),
+            1 => render_news_sub_tabs(frame, app, outer[2]),
+            _ => {}
+        }
+        (outer[3], outer[4])
+    } else {
+        (outer[2], outer[3])
+    };
+
+    if app.loading {
+        frame.render_widget(
+            Paragraph::new("Loading data...").block(Block::default().borders(Borders::ALL)),
+            content_area,
+        );
+    } else {
+        match app.main_tab {
+            0 => match app.active_tab {
                 0 => render_indices_tab(frame, app, content_area),
                 1 => render_portfolio_tab(frame, app, content_area, 0),
                 2 => render_portfolio_tab(frame, app, content_area, 1),
                 _ => {}
-            }
+            },
+            1 => render_news_tab(frame, app, content_area),
+            _ => render_placeholder(frame, app, content_area),
         }
-        render_status_bar(frame, app, status_area);
-    } else {
-        let content_area = outer[2];
-        let status_area = outer[3];
-        render_placeholder(frame, app, content_area);
-        render_status_bar(frame, app, status_area);
     }
+
+    render_status_bar(frame, app, status_area);
 }
 
 fn render_main_nav(frame: &mut Frame, app: &App, area: ratatui::layout::Rect) {
@@ -84,6 +90,165 @@ fn render_portfolio_sub_tabs(frame: &mut Frame, app: &App, area: ratatui::layout
         )
         .style(Style::default().fg(Color::White));
     frame.render_widget(tabs, area);
+}
+
+fn render_news_sub_tabs(frame: &mut Frame, app: &App, area: ratatui::layout::Rect) {
+    let tabs = Tabs::new(NEWS_TABS.iter().copied())
+        .select(app.news_tab)
+        .block(Block::default().borders(Borders::ALL))
+        .highlight_style(
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        )
+        .style(Style::default().fg(Color::White));
+    frame.render_widget(tabs, area);
+}
+
+fn render_news_tab(frame: &mut Frame, app: &App, area: ratatui::layout::Rect) {
+    let panes = Layout::horizontal([
+        Constraint::Percentage(35),
+        Constraint::Percentage(65),
+    ])
+    .split(area);
+
+    render_news_list(frame, app, panes[0]);
+    render_news_detail(frame, app, panes[1]);
+}
+
+fn render_news_list(frame: &mut Frame, app: &App, area: ratatui::layout::Rect) {
+    let articles = &app.news_articles[app.news_tab];
+    let category_label = NEWS_TABS[app.news_tab];
+
+    let items: Vec<ListItem> = articles
+        .iter()
+        .map(|a| ListItem::new(a.headline.clone()))
+        .collect();
+
+    let list = List::new(items)
+        .block(
+            Block::default()
+                .title(format!(" {category_label} "))
+                .borders(Borders::ALL),
+        )
+        .highlight_style(
+            Style::default()
+                .bg(Color::DarkGray)
+                .add_modifier(Modifier::BOLD),
+        )
+        .highlight_symbol("> ");
+
+    let mut state = ListState::default();
+    if !articles.is_empty() {
+        state.select(Some(app.news_focus));
+    }
+    frame.render_stateful_widget(list, area, &mut state);
+}
+
+fn render_news_detail(frame: &mut Frame, app: &App, area: ratatui::layout::Rect) {
+    let articles = &app.news_articles[app.news_tab];
+
+    if articles.is_empty() {
+        frame.render_widget(
+            Paragraph::new("No articles available.")
+                .block(Block::default().borders(Borders::ALL)),
+            area,
+        );
+        return;
+    }
+
+    let article = &articles[app.news_focus.min(articles.len() - 1)];
+
+    let rel_time = relative_time(article.datetime);
+    let meta = format!("  {} • {} • {}", article.source, rel_time, article.category);
+    let sep = "─".repeat(area.width.saturating_sub(2) as usize);
+    let url_display = strip_scheme(&article.url);
+
+    // Manually word-wrap the summary so every line gets the 2-space left pad.
+    let summary_width = area.width.saturating_sub(4) as usize; // borders (2) + padding (2)
+    let wrapped_summary = word_wrap(&article.summary, summary_width);
+
+    let mut lines: Vec<Line> = vec![
+        Line::raw(""),
+        Line::from(Span::styled(
+            article.headline.clone(),
+            Style::default().add_modifier(Modifier::BOLD),
+        )),
+        Line::raw(""),
+        Line::from(Span::styled(
+            meta,
+            Style::default().add_modifier(Modifier::DIM),
+        )),
+        Line::raw(sep),
+    ];
+
+    for summary_line in wrapped_summary {
+        lines.push(Line::raw(format!("  {summary_line}")));
+    }
+
+    lines.push(Line::raw(""));
+    lines.push(Line::from(vec![
+        Span::raw("  "),
+        Span::styled(
+            "[o]",
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        ),
+        Span::raw(format!(" open  {url_display}")),
+    ]));
+
+    let detail = Paragraph::new(lines)
+        .block(Block::default().borders(Borders::ALL))
+        .wrap(Wrap { trim: false });
+
+    frame.render_widget(detail, area);
+}
+
+fn relative_time(ts: i64) -> String {
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs() as i64;
+    let diff = (now - ts).max(0);
+    if diff < 60 {
+        format!("{diff}s ago")
+    } else if diff < 3600 {
+        format!("{}m ago", diff / 60)
+    } else if diff < 86400 {
+        format!("{}h ago", diff / 3600)
+    } else {
+        format!("{}d ago", diff / 86400)
+    }
+}
+
+fn strip_scheme(url: &str) -> String {
+    url.trim_start_matches("https://")
+        .trim_start_matches("http://")
+        .to_string()
+}
+
+fn word_wrap(text: &str, width: usize) -> Vec<String> {
+    if width == 0 {
+        return vec![text.to_string()];
+    }
+    let mut lines = Vec::new();
+    let mut current = String::new();
+    for word in text.split_whitespace() {
+        if current.is_empty() {
+            current.push_str(word);
+        } else if current.len() + 1 + word.len() <= width {
+            current.push(' ');
+            current.push_str(word);
+        } else {
+            lines.push(current.clone());
+            current = word.to_string();
+        }
+    }
+    if !current.is_empty() {
+        lines.push(current);
+    }
+    lines
 }
 
 fn render_placeholder(frame: &mut Frame, app: &App, area: ratatui::layout::Rect) {
@@ -225,17 +390,33 @@ fn render_status_bar(frame: &mut Frame, app: &App, area: ratatui::layout::Rect) 
         Span::raw("section"),
     ];
 
-    if app.main_tab == 0 {
-        spans.extend([Span::raw("  "), key("[ ]"), Span::raw("sub-tab")]);
-        if app.active_tab > 0 {
+    match app.main_tab {
+        0 => {
+            spans.extend([Span::raw("  "), key("[ ]"), Span::raw("sub-tab")]);
+            if app.active_tab > 0 {
+                spans.extend([
+                    Span::raw("  "),
+                    key("↑ ↓"),
+                    Span::raw("select  "),
+                    key("Enter"),
+                    Span::raw("open in browser"),
+                ]);
+            }
+        }
+        1 => {
             spans.extend([
                 Span::raw("  "),
+                key("[ ]"),
+                Span::raw("sub-tab  "),
                 key("↑ ↓"),
-                Span::raw("select  "),
-                key("Enter"),
-                Span::raw("open in browser"),
+                Span::raw("navigate  "),
+                key("o"),
+                Span::raw("open  "),
+                key("r"),
+                Span::raw("refresh"),
             ]);
         }
+        _ => {}
     }
 
     let status = Paragraph::new(Line::from(spans)).block(Block::default().borders(Borders::ALL));

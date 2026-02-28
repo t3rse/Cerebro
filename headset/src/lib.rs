@@ -6,7 +6,8 @@ use std::env;
 use finnhub::FinnhubClient;
 
 pub use error::{HeadsetError, Result};
-pub use models::{EarningsReport, StockQuote};
+pub use finnhub::models::news::NewsCategory;
+pub use models::{EarningsReport, MarketNews, StockQuote};
 
 /// Client for fetching financial data via the Finnhub API.
 pub struct Headset {
@@ -26,6 +27,17 @@ impl Headset {
     pub async fn quote(&self, symbol: &str) -> Result<StockQuote> {
         let q = self.client.stock().quote(symbol).await?;
         Ok(StockQuote::from_finnhub(symbol, q))
+    }
+
+    /// Fetch market news for the given `category`.
+    /// Pass `min_id` to paginate (only articles with id > min_id are returned).
+    pub async fn market_news(
+        &self,
+        category: NewsCategory,
+        min_id: Option<i64>,
+    ) -> Result<Vec<MarketNews>> {
+        let articles = self.client.news().market_news(category, min_id).await?;
+        Ok(articles.into_iter().map(MarketNews::from).collect())
     }
 
     /// Fetch earnings calendar entries, optionally filtered by date range and symbol.

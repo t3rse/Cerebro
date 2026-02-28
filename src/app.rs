@@ -1,11 +1,12 @@
 use std::collections::HashMap;
 
-use headset::{EarningsReport, StockQuote};
+use headset::{EarningsReport, MarketNews, StockQuote};
 
 use crate::portfolio::Portfolio;
 
 pub const MAIN_TABS: &[&str] = &["Portfolios", "News", "Research", "Calendar"];
 pub const TAB_TITLES: &[&str] = &["Indices", "Schwab", "Robinhood"];
+pub const NEWS_TABS: &[&str] = &["General", "Forex", "Crypto", "Merger"];
 
 const PORTFOLIO_COUNT: usize = 2;
 
@@ -14,10 +15,13 @@ pub struct App {
     pub earnings: Vec<EarningsReport>,
     pub portfolios: Vec<Portfolio>,
     pub portfolio_quotes: HashMap<String, StockQuote>,
+    pub news_articles: Vec<Vec<MarketNews>>,
     pub should_quit: bool,
     pub loading: bool,
     pub main_tab: usize,
     pub active_tab: usize,
+    pub news_tab: usize,
+    pub news_focus: usize,
     pub portfolio_focus: [Option<usize>; PORTFOLIO_COUNT],
 }
 
@@ -28,10 +32,13 @@ impl App {
             earnings: Vec::new(),
             portfolios: Vec::new(),
             portfolio_quotes: HashMap::new(),
+            news_articles: vec![Vec::new(); NEWS_TABS.len()],
             should_quit: false,
             loading: true,
             main_tab: 0,
             active_tab: 0,
+            news_tab: 0,
+            news_focus: 0,
             portfolio_focus: [None; PORTFOLIO_COUNT],
         }
     }
@@ -58,6 +65,39 @@ impl App {
         } else {
             self.active_tab -= 1;
         }
+    }
+
+    pub fn next_news_tab(&mut self) {
+        self.news_tab = (self.news_tab + 1) % NEWS_TABS.len();
+        self.news_focus = 0;
+    }
+
+    pub fn prev_news_tab(&mut self) {
+        if self.news_tab == 0 {
+            self.news_tab = NEWS_TABS.len() - 1;
+        } else {
+            self.news_tab -= 1;
+        }
+        self.news_focus = 0;
+    }
+
+    pub fn news_focus_next(&mut self) {
+        let len = self.news_articles[self.news_tab].len();
+        if len == 0 {
+            return;
+        }
+        self.news_focus = (self.news_focus + 1).min(len - 1);
+    }
+
+    pub fn news_focus_prev(&mut self) {
+        self.news_focus = self.news_focus.saturating_sub(1);
+    }
+
+    pub fn focused_news_url(&self) -> Option<&str> {
+        self.news_articles
+            .get(self.news_tab)?
+            .get(self.news_focus)
+            .map(|a| a.url.as_str())
     }
 
     fn portfolio_idx(&self) -> Option<usize> {

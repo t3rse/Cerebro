@@ -7,13 +7,22 @@ use std::collections::HashMap;
 use std::time::Duration;
 
 use crossterm::event::KeyCode;
-use headset::Headset;
+use headset::{Headset, NewsCategory};
 
 use app::App;
 use event::{Event, EventHandler};
 
 const SCHWAB_JSON: &str = include_str!("../examples/schwab_portfolio.json");
 const ROBINHOOD_JSON: &str = include_str!("../examples/robinhood_portfolio.json");
+
+fn news_tab_to_category(tab: usize) -> NewsCategory {
+    match tab {
+        0 => NewsCategory::General,
+        1 => NewsCategory::Forex,
+        2 => NewsCategory::Crypto,
+        _ => NewsCategory::Merger,
+    }
+}
 
 #[tokio::main]
 async fn main() {
@@ -57,6 +66,13 @@ async fn main() {
         app.earnings = reports;
     }
 
+    // Fetch market news for each category (order matches NEWS_TABS)
+    for i in 0..4 {
+        if let Ok(articles) = client.market_news(news_tab_to_category(i), None).await {
+            app.news_articles[i] = articles;
+        }
+    }
+
     // Fetch portfolio quotes
     let mut portfolio_quotes = HashMap::new();
     for ticker in &portfolio_tickers {
@@ -77,14 +93,42 @@ async fn main() {
                 KeyCode::Char('q') => app.should_quit = true,
                 KeyCode::Right => app.next_main_tab(),
                 KeyCode::Left => app.prev_main_tab(),
-                KeyCode::Char(']') => app.next_tab(),
-                KeyCode::Char('[') => app.prev_tab(),
-                KeyCode::Down => app.focus_next(),
-                KeyCode::Up => app.focus_prev(),
+                KeyCode::Char(']') => match app.main_tab {
+                    0 => app.next_tab(),
+                    1 => app.next_news_tab(),
+                    _ => {}
+                },
+                KeyCode::Char('[') => match app.main_tab {
+                    0 => app.prev_tab(),
+                    1 => app.prev_news_tab(),
+                    _ => {}
+                },
+                KeyCode::Down => match app.main_tab {
+                    0 => app.focus_next(),
+                    1 => app.news_focus_next(),
+                    _ => {}
+                },
+                KeyCode::Up => match app.main_tab {
+                    0 => app.focus_prev(),
+                    1 => app.news_focus_prev(),
+                    _ => {}
+                },
                 KeyCode::Enter => {
                     if let Some(ticker) = app.focused_ticker() {
                         let url = format!("https://finance.yahoo.com/quote/{}/", ticker);
                         std::process::Command::new("open").arg(&url).spawn().ok();
+                    }
+                }
+                KeyCode::Char('o') if app.main_tab == 1 => {
+                    if let Some(url) = app.focused_news_url() {
+                        std::process::Command::new("open").arg(url).spawn().ok();
+                    }
+                }
+                KeyCode::Char('r') if app.main_tab == 1 => {
+                    let tab = app.news_tab;
+                    if let Ok(articles) = client.market_news(news_tab_to_category(tab), None).await {
+                        app.news_articles[tab] = articles;
+                        app.news_focus = 0;
                     }
                 }
                 _ => {}

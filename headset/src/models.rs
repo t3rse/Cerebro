@@ -1,4 +1,5 @@
 use finnhub::models::calendar::EarningsRelease;
+use finnhub::models::news::MarketNews as FinnhubMarketNews;
 use finnhub::models::stock::Quote;
 
 /// A real-time stock quote.
@@ -28,6 +29,36 @@ impl StockQuote {
             open: q.open,
             previous_close: q.previous_close,
             timestamp: q.timestamp,
+        }
+    }
+}
+
+/// A single market news article.
+#[derive(Debug, Clone)]
+pub struct MarketNews {
+    pub category: String,
+    pub datetime: i64,
+    pub headline: String,
+    pub id: i64,
+    pub image: String,
+    pub related: String,
+    pub source: String,
+    pub summary: String,
+    pub url: String,
+}
+
+impl From<FinnhubMarketNews> for MarketNews {
+    fn from(n: FinnhubMarketNews) -> Self {
+        Self {
+            category: n.category,
+            datetime: n.datetime,
+            headline: n.headline,
+            id: n.id,
+            image: n.image,
+            related: n.related,
+            source: n.source,
+            summary: n.summary,
+            url: n.url,
         }
     }
 }
