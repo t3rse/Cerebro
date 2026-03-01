@@ -62,6 +62,7 @@ pub fn render(frame: &mut Frame, app: &App) {
                 _ => {}
             },
             1 => render_news_tab(frame, app, content_area),
+            2 => render_research_tab(frame, app, content_area),
             _ => render_placeholder(frame, app, content_area),
         }
     }
@@ -189,21 +190,42 @@ fn render_news_detail(frame: &mut Frame, app: &App, area: ratatui::layout::Rect)
         return;
     }
 
-    let article = &articles[app.news_focus.min(articles.len() - 1)];
+    let a = &articles[app.news_focus.min(articles.len() - 1)];
+    render_article_detail(
+        frame,
+        area,
+        &a.headline,
+        &a.source,
+        a.datetime,
+        &a.category,
+        &a.summary,
+        &a.url,
+    );
+}
 
-    let rel_time = relative_time(article.datetime);
-    let meta = format!("  {} • {} • {}", article.source, rel_time, article.category);
+/// Shared detail pane renderer used by both News and Research.
+#[allow(clippy::too_many_arguments)]
+fn render_article_detail(
+    frame: &mut Frame,
+    area: ratatui::layout::Rect,
+    headline: &str,
+    source: &str,
+    datetime: i64,
+    category: &str,
+    summary: &str,
+    url: &str,
+) {
+    let rel_time = relative_time(datetime);
+    let meta = format!("  {} • {} • {}", source, rel_time, category);
     let sep = "─".repeat(area.width.saturating_sub(2) as usize);
-    let url_display = strip_scheme(&article.url);
-
-    // Manually word-wrap the summary so every line gets the 2-space left pad.
-    let summary_width = area.width.saturating_sub(4) as usize; // borders (2) + padding (2)
-    let wrapped_summary = word_wrap(&article.summary, summary_width);
+    let url_display = strip_scheme(url);
+    let summary_width = area.width.saturating_sub(4) as usize;
+    let wrapped_summary = word_wrap(summary, summary_width);
 
     let mut lines: Vec<Line> = vec![
         Line::raw(""),
         Line::from(Span::styled(
-            article.headline.clone(),
+            headline.to_string(),
             Style::default().add_modifier(Modifier::BOLD),
         )),
         Line::raw(""),
@@ -214,8 +236,8 @@ fn render_news_detail(frame: &mut Frame, app: &App, area: ratatui::layout::Rect)
         Line::raw(sep),
     ];
 
-    for summary_line in wrapped_summary {
-        lines.push(Line::raw(format!("  {summary_line}")));
+    for s in wrapped_summary {
+        lines.push(Line::raw(format!("  {s}")));
     }
 
     lines.push(Line::raw(""));
@@ -230,11 +252,175 @@ fn render_news_detail(frame: &mut Frame, app: &App, area: ratatui::layout::Rect)
         Span::raw(format!(" open  {url_display}")),
     ]));
 
-    let detail = Paragraph::new(lines)
-        .block(Block::default().borders(Borders::ALL))
-        .wrap(Wrap { trim: false });
+    frame.render_widget(
+        Paragraph::new(lines)
+            .block(Block::default().borders(Borders::ALL))
+            .wrap(Wrap { trim: false }),
+        area,
+    );
+}
 
-    frame.render_widget(detail, area);
+// ── Research tab ──────────────────────────────────────────────────────────────
+
+fn render_research_tab(frame: &mut Frame, app: &App, area: ratatui::layout::Rect) {
+    // If the command palette is open, carve off a 3-row input bar at the top.
+    let content_area = if app.is_research_inputting() {
+        let split = Layout::vertical([Constraint::Length(3), Constraint::Fill(1)]).split(area);
+        render_research_input(frame, app, split[0]);
+        split[1]
+    } else {
+        area
+    };
+
+    if app.research_quote.is_some() {
+        let rows =
+            Layout::vertical([Constraint::Length(6), Constraint::Fill(1)]).split(content_area);
+        render_research_quote(frame, app, rows[0]);
+        let panes = Layout::horizontal([Constraint::Percentage(35), Constraint::Percentage(65)])
+            .split(rows[1]);
+        render_research_news_list(frame, app, panes[0]);
+        render_research_news_detail(frame, app, panes[1]);
+    } else {
+        render_research_empty(frame, content_area);
+    }
+}
+
+fn render_research_input(frame: &mut Frame, app: &App, area: ratatui::layout::Rect) {
+    let text = format!(": {}▌", app.research_input_text());
+    let p = Paragraph::new(text)
+        .block(
+            Block::default()
+                .title(" Symbol Search ")
+                .borders(Borders::ALL),
+        )
+        .style(Style::default().fg(Color::Yellow));
+    frame.render_widget(p, area);
+}
+
+fn render_research_empty(frame: &mut Frame, area: ratatui::layout::Rect) {
+    let p = Paragraph::new(vec![
+        Line::raw(""),
+        Line::from(Span::styled(
+            "  Press : to search for a symbol",
+            Style::default().fg(Color::DarkGray),
+        )),
+    ])
+    .block(Block::default().borders(Borders::ALL));
+    frame.render_widget(p, area);
+}
+
+fn render_research_quote(frame: &mut Frame, app: &App, area: ratatui::layout::Rect) {
+    let Some(q) = &app.research_quote else { return };
+    let change_color = if q.change >= 0.0 {
+        Color::Green
+    } else {
+        Color::Red
+    };
+    let sign = if q.change >= 0.0 { "+" } else { "" };
+
+    let lines = vec![
+        Line::raw(""),
+        Line::from(vec![
+            Span::raw("  "),
+            Span::styled(
+                format!("${:.2}", q.current_price),
+                Style::default().add_modifier(Modifier::BOLD),
+            ),
+            Span::raw("   "),
+            Span::styled(
+                format!(
+                    "{}{:.2}  ({}{:.2}%)",
+                    sign, q.change, sign, q.percent_change
+                ),
+                Style::default().fg(change_color),
+            ),
+        ]),
+        Line::from(Span::styled(
+            format!(
+                "  H ${:.2}  L ${:.2}  O ${:.2}  C ${:.2}",
+                q.high, q.low, q.open, q.previous_close
+            ),
+            Style::default().add_modifier(Modifier::DIM),
+        )),
+    ];
+
+    let symbol = app.research_symbol.as_deref().unwrap_or("");
+    frame.render_widget(
+        Paragraph::new(lines).block(
+            Block::default()
+                .title(format!(" {symbol} "))
+                .borders(Borders::ALL),
+        ),
+        area,
+    );
+}
+
+fn render_research_news_list(frame: &mut Frame, app: &App, area: ratatui::layout::Rect) {
+    let articles = &app.research_news;
+    let inner_width = area.width.saturating_sub(4) as usize;
+
+    let items: Vec<ListItem> = articles
+        .iter()
+        .map(|a| {
+            let headline = truncate(&a.headline, inner_width);
+            let meta = truncate(
+                &format!("{} · {}", a.source, relative_time(a.datetime)),
+                inner_width,
+            );
+            ListItem::new(Text::from(vec![
+                Line::from(Span::styled(
+                    headline,
+                    Style::default().add_modifier(Modifier::BOLD),
+                )),
+                Line::from(Span::styled(meta, Style::default().fg(Color::DarkGray))),
+                Line::raw(""),
+            ]))
+        })
+        .collect();
+
+    let symbol = app.research_symbol.as_deref().unwrap_or("Symbol");
+    let list = List::new(items)
+        .block(
+            Block::default()
+                .title(format!(" {symbol} News "))
+                .borders(Borders::ALL),
+        )
+        .highlight_style(
+            Style::default()
+                .bg(Color::DarkGray)
+                .add_modifier(Modifier::BOLD),
+        )
+        .highlight_symbol("▶ ");
+
+    let mut state = ListState::default();
+    if !articles.is_empty() {
+        state.select(Some(app.research_news_focus));
+    }
+    frame.render_stateful_widget(list, area, &mut state);
+}
+
+fn render_research_news_detail(frame: &mut Frame, app: &App, area: ratatui::layout::Rect) {
+    let articles = &app.research_news;
+
+    if articles.is_empty() {
+        frame.render_widget(
+            Paragraph::new("No recent news found.").block(Block::default().borders(Borders::ALL)),
+            area,
+        );
+        return;
+    }
+
+    let a = &articles[app.research_news_focus.min(articles.len() - 1)];
+    render_article_detail(
+        frame,
+        area,
+        &a.headline,
+        &a.source,
+        a.datetime,
+        &a.category,
+        &a.summary,
+        &a.url,
+    );
 }
 
 fn relative_time(ts: i64) -> String {
@@ -415,28 +601,35 @@ fn render_status_bar(frame: &mut Frame, app: &App, area: ratatui::layout::Rect) 
         )
     };
 
-    let mut spans = vec![
-        key("q"),
-        Span::raw("quit  "),
-        key("← →"),
-        Span::raw("section"),
-    ];
-
-    match app.main_tab {
-        0 => {
-            spans.extend([Span::raw("  "), key("[ ]"), Span::raw("sub-tab")]);
-            if app.active_tab > 0 {
-                spans.extend([
-                    Span::raw("  "),
-                    key("↑ ↓"),
-                    Span::raw("select  "),
-                    key("Enter"),
-                    Span::raw("open in browser"),
-                ]);
+    // While the research palette is open, show only the input-mode hints.
+    let spans: Vec<Span> = if app.is_research_inputting() {
+        vec![
+            key("Enter"),
+            Span::raw("search  "),
+            key("Esc"),
+            Span::raw("cancel"),
+        ]
+    } else {
+        let mut s = vec![
+            key("q"),
+            Span::raw("quit  "),
+            key("← →"),
+            Span::raw("section"),
+        ];
+        match app.main_tab {
+            0 => {
+                s.extend([Span::raw("  "), key("[ ]"), Span::raw("sub-tab")]);
+                if app.active_tab > 0 {
+                    s.extend([
+                        Span::raw("  "),
+                        key("↑ ↓"),
+                        Span::raw("select  "),
+                        key("Enter"),
+                        Span::raw("open in browser"),
+                    ]);
+                }
             }
-        }
-        1 => {
-            spans.extend([
+            1 => s.extend([
                 Span::raw("  "),
                 key("[ ]"),
                 Span::raw("sub-tab  "),
@@ -446,13 +639,28 @@ fn render_status_bar(frame: &mut Frame, app: &App, area: ratatui::layout::Rect) 
                 Span::raw("open  "),
                 key("r"),
                 Span::raw("refresh"),
-            ]);
+            ]),
+            2 => {
+                s.extend([Span::raw("  "), key(":"), Span::raw("search")]);
+                if app.research_quote.is_some() {
+                    s.extend([
+                        Span::raw("  "),
+                        key("↑ ↓"),
+                        Span::raw("navigate  "),
+                        key("o"),
+                        Span::raw("open"),
+                    ]);
+                }
+            }
+            _ => {}
         }
-        _ => {}
-    }
+        s
+    };
 
-    let status = Paragraph::new(Line::from(spans)).block(Block::default().borders(Borders::ALL));
-    frame.render_widget(status, area);
+    frame.render_widget(
+        Paragraph::new(Line::from(spans)).block(Block::default().borders(Borders::ALL)),
+        area,
+    );
 }
 
 fn render_quotes_table(frame: &mut Frame, app: &App, area: ratatui::layout::Rect) {

@@ -1,4 +1,5 @@
 use finnhub::models::calendar::EarningsRelease;
+use finnhub::models::news::CompanyNews as FinnhubCompanyNews;
 use finnhub::models::news::MarketNews as FinnhubMarketNews;
 use finnhub::models::stock::Quote;
 
@@ -49,6 +50,36 @@ pub struct MarketNews {
 
 impl From<FinnhubMarketNews> for MarketNews {
     fn from(n: FinnhubMarketNews) -> Self {
+        Self {
+            category: n.category,
+            datetime: n.datetime,
+            headline: n.headline,
+            id: n.id,
+            image: n.image,
+            related: n.related,
+            source: n.source,
+            summary: n.summary,
+            url: n.url,
+        }
+    }
+}
+
+/// A company-specific news article.
+#[derive(Debug, Clone)]
+pub struct CompanyNews {
+    pub category: String,
+    pub datetime: i64,
+    pub headline: String,
+    pub id: i64,
+    pub image: String,
+    pub related: String,
+    pub source: String,
+    pub summary: String,
+    pub url: String,
+}
+
+impl From<FinnhubCompanyNews> for CompanyNews {
+    fn from(n: FinnhubCompanyNews) -> Self {
         Self {
             category: n.category,
             datetime: n.datetime,

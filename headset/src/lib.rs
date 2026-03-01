@@ -7,7 +7,7 @@ use finnhub::FinnhubClient;
 
 pub use error::{HeadsetError, Result};
 pub use finnhub::models::news::NewsCategory;
-pub use models::{EarningsReport, MarketNews, StockQuote};
+pub use models::{CompanyNews, EarningsReport, MarketNews, StockQuote};
 
 /// Client for fetching financial data via the Finnhub API.
 pub struct Headset {
@@ -38,6 +38,17 @@ impl Headset {
     ) -> Result<Vec<MarketNews>> {
         let articles = self.client.news().market_news(category, min_id).await?;
         Ok(articles.into_iter().map(MarketNews::from).collect())
+    }
+
+    /// Fetch company-specific news for `symbol` between `from` and `to` (YYYY-MM-DD).
+    pub async fn company_news(
+        &self,
+        symbol: &str,
+        from: &str,
+        to: &str,
+    ) -> Result<Vec<CompanyNews>> {
+        let articles = self.client.news().company_news(symbol, from, to).await?;
+        Ok(articles.into_iter().map(CompanyNews::from).collect())
     }
 
     /// Fetch earnings calendar entries, optionally filtered by date range and symbol.

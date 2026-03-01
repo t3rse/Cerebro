@@ -24,6 +24,44 @@ fn news_tab_to_category(tab: usize) -> NewsCategory {
     }
 }
 
+/// Returns a `YYYY-MM-DD` string for `days_ago` days before today.
+fn date_days_ago(days_ago: u64) -> String {
+    let secs = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs()
+        .saturating_sub(days_ago * 86400);
+
+    let mut remaining = secs / 86400;
+    let mut year = 1970u64;
+    loop {
+        let y_days = if is_leap(year) { 366 } else { 365 };
+        if remaining < y_days {
+            break;
+        }
+        remaining -= y_days;
+        year += 1;
+    }
+    let month_days: [u64; 12] = if is_leap(year) {
+        [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+    } else {
+        [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+    };
+    let mut month = 1u64;
+    for &md in &month_days {
+        if remaining < md {
+            break;
+        }
+        remaining -= md;
+        month += 1;
+    }
+    format!("{year:04}-{month:02}-{:02}", remaining + 1)
+}
+
+fn is_leap(year: u64) -> bool {
+    (year % 4 == 0 && year % 100 != 0) || year % 400 == 0
+}
+
 #[tokio::main]
 async fn main() {
     dotenvy::dotenv().ok();
@@ -44,7 +82,6 @@ async fn main() {
     let robinhood: portfolio::Portfolio =
         serde_json::from_str(ROBINHOOD_JSON).expect("Failed to parse robinhood_portfolio.json");
 
-    // Collect all portfolio tickers for quote fetching
     let portfolio_tickers: Vec<String> = schwab
         .positions
         .iter()
@@ -89,51 +126,84 @@ async fn main() {
 
     while !app.should_quit {
         match events.next().await {
-            Some(Event::Key(key)) => match key.code {
-                KeyCode::Char('q') => app.should_quit = true,
-                KeyCode::Right => app.next_main_tab(),
-                KeyCode::Left => app.prev_main_tab(),
-                KeyCode::Char(']') => match app.main_tab {
-                    0 => app.next_tab(),
-                    1 => app.next_news_tab(),
-                    _ => {}
-                },
-                KeyCode::Char('[') => match app.main_tab {
-                    0 => app.prev_tab(),
-                    1 => app.prev_news_tab(),
-                    _ => {}
-                },
-                KeyCode::Down => match app.main_tab {
-                    0 => app.focus_next(),
-                    1 => app.news_focus_next(),
-                    _ => {}
-                },
-                KeyCode::Up => match app.main_tab {
-                    0 => app.focus_prev(),
-                    1 => app.news_focus_prev(),
-                    _ => {}
-                },
-                KeyCode::Enter => {
-                    if let Some(ticker) = app.focused_ticker() {
-                        let url = format!("https://finance.yahoo.com/quote/{}/", ticker);
-                        std::process::Command::new("open").arg(&url).spawn().ok();
+            Some(Event::Key(key)) => {
+                // Research command palette intercepts all keys while open.
+                if app.is_research_inputting() {
+                    match key.code {
+                        KeyCode::Esc => app.research_cancel(),
+                        KeyCode::Backspace => app.research_input_pop(),
+                        KeyCode::Enter => {
+                            if let Some(symbol) = app.research_submit() {
+                                let today = date_days_ago(0);
+                                let from = date_days_ago(30);
+                                app.research_quote = client.quote(&symbol).await.ok();
+                                app.research_news = client
+                                    .company_news(&symbol, &from, &today)
+                                    .await
+                                    .unwrap_or_default();
+                                app.research_news_focus = 0;
+                            }
+                        }
+                        KeyCode::Char(c) => app.research_input_push(c.to_ascii_uppercase()),
+                        _ => {}
+                    }
+                } else {
+                    match key.code {
+                        KeyCode::Char('q') => app.should_quit = true,
+                        KeyCode::Right => app.next_main_tab(),
+                        KeyCode::Left => app.prev_main_tab(),
+                        KeyCode::Char(':') if app.main_tab == 2 => app.research_start_input(),
+                        KeyCode::Char(']') => match app.main_tab {
+                            0 => app.next_tab(),
+                            1 => app.next_news_tab(),
+                            _ => {}
+                        },
+                        KeyCode::Char('[') => match app.main_tab {
+                            0 => app.prev_tab(),
+                            1 => app.prev_news_tab(),
+                            _ => {}
+                        },
+                        KeyCode::Down => match app.main_tab {
+                            0 => app.focus_next(),
+                            1 => app.news_focus_next(),
+                            2 => app.research_news_focus_next(),
+                            _ => {}
+                        },
+                        KeyCode::Up => match app.main_tab {
+                            0 => app.focus_prev(),
+                            1 => app.news_focus_prev(),
+                            2 => app.research_news_focus_prev(),
+                            _ => {}
+                        },
+                        KeyCode::Enter => {
+                            if let Some(ticker) = app.focused_ticker() {
+                                let url = format!("https://finance.yahoo.com/quote/{}/", ticker);
+                                std::process::Command::new("open").arg(&url).spawn().ok();
+                            }
+                        }
+                        KeyCode::Char('o') if app.main_tab == 1 => {
+                            if let Some(url) = app.focused_news_url() {
+                                std::process::Command::new("open").arg(url).spawn().ok();
+                            }
+                        }
+                        KeyCode::Char('o') if app.main_tab == 2 => {
+                            if let Some(url) = app.focused_research_news_url() {
+                                std::process::Command::new("open").arg(url).spawn().ok();
+                            }
+                        }
+                        KeyCode::Char('r') if app.main_tab == 1 => {
+                            let tab = app.news_tab;
+                            if let Ok(articles) =
+                                client.market_news(news_tab_to_category(tab), None).await
+                            {
+                                app.news_articles[tab] = articles;
+                                app.news_focus = 0;
+                            }
+                        }
+                        _ => {}
                     }
                 }
-                KeyCode::Char('o') if app.main_tab == 1 => {
-                    if let Some(url) = app.focused_news_url() {
-                        std::process::Command::new("open").arg(url).spawn().ok();
-                    }
-                }
-                KeyCode::Char('r') if app.main_tab == 1 => {
-                    let tab = app.news_tab;
-                    if let Ok(articles) = client.market_news(news_tab_to_category(tab), None).await
-                    {
-                        app.news_articles[tab] = articles;
-                        app.news_focus = 0;
-                    }
-                }
-                _ => {}
-            },
+            }
             Some(Event::Render) => {
                 terminal
                     .draw(|frame| ui::render(frame, &app))
