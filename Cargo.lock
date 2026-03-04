@@ -703,6 +703,7 @@ name = "headset"
 version = "0.1.0"
 dependencies = [
  "finnhub",
+ "serde_json",
  "thiserror 1.0.69",
  "tokio",
 ]

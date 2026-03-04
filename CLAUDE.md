@@ -51,10 +51,13 @@ cargo build --release
 | `r` | Refresh news for current category |
 | `:` | Open symbol search (Research tab only) |
 | `Esc` | Cancel symbol search input |
+| `[ ]` | Switch research sub-tab (Basic Financials / Filings / Company Peers) |
+| `↑ ↓` | Navigate filings list or peers list (Research tab) |
+| `o` | Open focused SEC filing URL in browser (Filings sub-tab) |
 
 ## Architecture Notes
 
-- **`headset` crate** is a thin wrapper around the `finnhub` crate, mapping its types to clean domain models. All API calls go through `Headset`.
+- **`headset` crate** is a thin wrapper around the `finnhub` crate, mapping its types to clean domain models. All API calls go through `Headset`. Methods: `quote`, `market_news`, `company_news`, `earnings`, `basic_financials`, `filings`, `company_peers`.
 - **`App`** holds all application state. Navigation state (`main_tab`, `active_tab`, `news_tab`, focus indices) lives here alongside data (`quotes`, `news_articles`, `portfolios`, etc.).
 - **`ui.rs`** is purely a rendering layer — it reads `&App` and produces ratatui widgets. No state mutation happens here.
 - **`main.rs`** owns the async runtime and event loop. API fetches happen upfront before the TUI starts (blocking on load), then the loop handles key events and render ticks.

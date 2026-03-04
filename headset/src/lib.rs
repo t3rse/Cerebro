@@ -7,7 +7,9 @@ use finnhub::FinnhubClient;
 
 pub use error::{HeadsetError, Result};
 pub use finnhub::models::news::NewsCategory;
-pub use models::{CompanyNews, EarningsReport, MarketNews, StockQuote};
+pub use models::{
+    BasicFinancials, CompanyNews, EarningsReport, FilingEntry, MarketNews, StockQuote,
+};
 
 /// Client for fetching financial data via the Finnhub API.
 pub struct Headset {
@@ -49,6 +51,38 @@ impl Headset {
     ) -> Result<Vec<CompanyNews>> {
         let articles = self.client.news().company_news(symbol, from, to).await?;
         Ok(articles.into_iter().map(CompanyNews::from).collect())
+    }
+
+    /// Fetch key financial metrics for `symbol`.
+    pub async fn basic_financials(&self, symbol: &str) -> Result<BasicFinancials> {
+        let bf = self.client.stock().metrics(symbol).await?;
+        Ok(BasicFinancials {
+            symbol: bf.symbol,
+            metrics: bf.metric,
+        })
+    }
+
+    /// Fetch SEC filings for `symbol`.
+    pub async fn filings(&self, symbol: &str) -> Result<Vec<FilingEntry>> {
+        let entries = self
+            .client
+            .stock()
+            .sec_filings(Some(symbol), None, None, None, None, None)
+            .await?;
+        Ok(entries
+            .into_iter()
+            .map(|f| FilingEntry {
+                form: f.form,
+                filed_date: f.filed_date,
+                report_url: f.report_url,
+                filing_url: f.filing_url,
+            })
+            .collect())
+    }
+
+    /// Fetch peer company symbols for `symbol`.
+    pub async fn company_peers(&self, symbol: &str) -> Result<Vec<String>> {
+        Ok(self.client.stock().peers(symbol, None).await?)
     }
 
     /// Fetch earnings calendar entries, optionally filtered by date range and symbol.

@@ -1,4 +1,4 @@
-use crate::app::{App, MAIN_TABS, NEWS_TABS, TAB_TITLES};
+use crate::app::{App, MAIN_TABS, NEWS_TABS, RESEARCH_SUB_TABS, TAB_TITLES};
 use ratatui::text::Text;
 use ratatui::{
     Frame,
@@ -273,16 +273,181 @@ fn render_research_tab(frame: &mut Frame, app: &App, area: ratatui::layout::Rect
     };
 
     if app.research_quote.is_some() {
-        let rows =
-            Layout::vertical([Constraint::Length(6), Constraint::Fill(1)]).split(content_area);
+        let rows = Layout::vertical([
+            Constraint::Length(6), // quote pane
+            Constraint::Length(3), // sub-tabs bar
+            Constraint::Fill(1),   // sub-tab content
+        ])
+        .split(content_area);
         render_research_quote(frame, app, rows[0]);
-        let panes = Layout::horizontal([Constraint::Percentage(35), Constraint::Percentage(65)])
-            .split(rows[1]);
-        render_research_news_list(frame, app, panes[0]);
-        render_research_news_detail(frame, app, panes[1]);
+        render_research_sub_tabs(frame, app, rows[1]);
+        match app.research_sub_tab {
+            0 => render_basic_financials(frame, app, rows[2]),
+            1 => render_filings(frame, app, rows[2]),
+            2 => render_company_peers(frame, app, rows[2]),
+            _ => {}
+        }
     } else {
         render_research_empty(frame, content_area);
     }
+}
+
+fn render_research_sub_tabs(frame: &mut Frame, app: &App, area: ratatui::layout::Rect) {
+    let tabs = Tabs::new(RESEARCH_SUB_TABS.iter().copied())
+        .select(app.research_sub_tab)
+        .block(Block::default().borders(Borders::ALL))
+        .highlight_style(
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        )
+        .style(Style::default().fg(Color::White));
+    frame.render_widget(tabs, area);
+}
+
+fn render_basic_financials(frame: &mut Frame, app: &App, area: ratatui::layout::Rect) {
+    let Some(ref bf) = app.research_financials else {
+        frame.render_widget(
+            Paragraph::new("No financial data available.")
+                .block(Block::default().borders(Borders::ALL)),
+            area,
+        );
+        return;
+    };
+
+    const METRICS: &[(&str, &str)] = &[
+        ("52WeekHigh", "52-Week High"),
+        ("52WeekLow", "52-Week Low"),
+        ("marketCapitalization", "Market Cap (M)"),
+        ("peBasicExclExtraTTM", "P/E (TTM)"),
+        ("pbAnnual", "P/B"),
+        ("dividendYieldIndicatedAnnual", "Dividend Yield"),
+        ("epsBasicExclExtraItemsTTM", "EPS (TTM)"),
+        ("beta", "Beta"),
+        ("currentRatioAnnual", "Current Ratio"),
+        ("debtToEquityAnnual", "Debt/Equity"),
+        ("revenueGrowth3Y", "Rev Growth 3Y"),
+        ("epsGrowth3Y", "EPS Growth 3Y"),
+        ("roaTTM", "ROA (TTM)"),
+        ("roeTTM", "ROE (TTM)"),
+    ];
+
+    let rows: Vec<Row> = METRICS
+        .iter()
+        .filter_map(|(key, label)| {
+            let val = bf.metrics.get(*key)?;
+            let display = if let Some(f) = val.as_f64() {
+                format!("{f:.2}")
+            } else if let Some(s) = val.as_str() {
+                s.to_string()
+            } else {
+                return None;
+            };
+            Some(Row::new(vec![
+                Cell::from(*label).style(Style::default().fg(Color::Yellow)),
+                Cell::from(display),
+            ]))
+        })
+        .collect();
+
+    let widths = [Constraint::Percentage(40), Constraint::Percentage(60)];
+    let table = Table::new(rows, widths).block(
+        Block::default()
+            .title(" Basic Financials ")
+            .borders(Borders::ALL),
+    );
+    frame.render_widget(table, area);
+}
+
+fn render_filings(frame: &mut Frame, app: &App, area: ratatui::layout::Rect) {
+    let filings = &app.research_filings;
+
+    let items: Vec<ListItem> = filings
+        .iter()
+        .map(|f| {
+            let form = f.form.as_deref().unwrap_or("—");
+            let date = f.filed_date.as_deref().unwrap_or("—");
+            let url = f
+                .report_url
+                .as_deref()
+                .or(f.filing_url.as_deref())
+                .unwrap_or("");
+            let url_display = url
+                .trim_start_matches("https://")
+                .trim_start_matches("http://");
+            ListItem::new(Text::from(vec![
+                Line::from(vec![
+                    Span::styled(
+                        form.to_string(),
+                        Style::default()
+                            .fg(Color::Cyan)
+                            .add_modifier(Modifier::BOLD),
+                    ),
+                    Span::raw("   "),
+                    Span::raw(date.to_string()),
+                ]),
+                Line::from(Span::styled(
+                    url_display.to_string(),
+                    Style::default().fg(Color::DarkGray),
+                )),
+                Line::raw(""),
+            ]))
+        })
+        .collect();
+
+    let list = List::new(items)
+        .block(
+            Block::default()
+                .title(" SEC Filings ")
+                .borders(Borders::ALL),
+        )
+        .highlight_style(
+            Style::default()
+                .bg(Color::DarkGray)
+                .add_modifier(Modifier::BOLD),
+        )
+        .highlight_symbol("▶ ");
+
+    let mut state = ListState::default();
+    if !filings.is_empty() {
+        state.select(Some(app.research_filings_focus));
+    }
+    frame.render_stateful_widget(list, area, &mut state);
+}
+
+fn render_company_peers(frame: &mut Frame, app: &App, area: ratatui::layout::Rect) {
+    let peers = &app.research_peers;
+
+    let items: Vec<ListItem> = peers
+        .iter()
+        .map(|symbol| {
+            ListItem::new(Line::from(Span::styled(
+                symbol.clone(),
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            )))
+        })
+        .collect();
+
+    let list = List::new(items)
+        .block(
+            Block::default()
+                .title(" Company Peers ")
+                .borders(Borders::ALL),
+        )
+        .highlight_style(
+            Style::default()
+                .bg(Color::DarkGray)
+                .add_modifier(Modifier::BOLD),
+        )
+        .highlight_symbol("▶ ");
+
+    let mut state = ListState::default();
+    if !peers.is_empty() {
+        state.select(Some(app.research_peers_focus));
+    }
+    frame.render_stateful_widget(list, area, &mut state);
 }
 
 fn render_research_input(frame: &mut Frame, app: &App, area: ratatui::layout::Rect) {
@@ -352,74 +517,6 @@ fn render_research_quote(frame: &mut Frame, app: &App, area: ratatui::layout::Re
                 .borders(Borders::ALL),
         ),
         area,
-    );
-}
-
-fn render_research_news_list(frame: &mut Frame, app: &App, area: ratatui::layout::Rect) {
-    let articles = &app.research_news;
-    let inner_width = area.width.saturating_sub(4) as usize;
-
-    let items: Vec<ListItem> = articles
-        .iter()
-        .map(|a| {
-            let headline = truncate(&a.headline, inner_width);
-            let meta = truncate(
-                &format!("{} · {}", a.source, relative_time(a.datetime)),
-                inner_width,
-            );
-            ListItem::new(Text::from(vec![
-                Line::from(Span::styled(
-                    headline,
-                    Style::default().add_modifier(Modifier::BOLD),
-                )),
-                Line::from(Span::styled(meta, Style::default().fg(Color::DarkGray))),
-                Line::raw(""),
-            ]))
-        })
-        .collect();
-
-    let symbol = app.research_symbol.as_deref().unwrap_or("Symbol");
-    let list = List::new(items)
-        .block(
-            Block::default()
-                .title(format!(" {symbol} News "))
-                .borders(Borders::ALL),
-        )
-        .highlight_style(
-            Style::default()
-                .bg(Color::DarkGray)
-                .add_modifier(Modifier::BOLD),
-        )
-        .highlight_symbol("▶ ");
-
-    let mut state = ListState::default();
-    if !articles.is_empty() {
-        state.select(Some(app.research_news_focus));
-    }
-    frame.render_stateful_widget(list, area, &mut state);
-}
-
-fn render_research_news_detail(frame: &mut Frame, app: &App, area: ratatui::layout::Rect) {
-    let articles = &app.research_news;
-
-    if articles.is_empty() {
-        frame.render_widget(
-            Paragraph::new("No recent news found.").block(Block::default().borders(Borders::ALL)),
-            area,
-        );
-        return;
-    }
-
-    let a = &articles[app.research_news_focus.min(articles.len() - 1)];
-    render_article_detail(
-        frame,
-        area,
-        &a.headline,
-        &a.source,
-        a.datetime,
-        &a.category,
-        &a.summary,
-        &a.url,
     );
 }
 
@@ -643,13 +740,18 @@ fn render_status_bar(frame: &mut Frame, app: &App, area: ratatui::layout::Rect) 
             2 => {
                 s.extend([Span::raw("  "), key(":"), Span::raw("search")]);
                 if app.research_quote.is_some() {
-                    s.extend([
-                        Span::raw("  "),
-                        key("↑ ↓"),
-                        Span::raw("navigate  "),
-                        key("o"),
-                        Span::raw("open"),
-                    ]);
+                    s.extend([Span::raw("  "), key("[ ]"), Span::raw("sub-tab")]);
+                    match app.research_sub_tab {
+                        1 => s.extend([
+                            Span::raw("  "),
+                            key("↑ ↓"),
+                            Span::raw("navigate  "),
+                            key("o"),
+                            Span::raw("open"),
+                        ]),
+                        2 => s.extend([Span::raw("  "), key("↑ ↓"), Span::raw("navigate")]),
+                        _ => {}
+                    }
                 }
             }
             _ => {}

@@ -134,14 +134,16 @@ async fn main() {
                         KeyCode::Backspace => app.research_input_pop(),
                         KeyCode::Enter => {
                             if let Some(symbol) = app.research_submit() {
-                                let today = date_days_ago(0);
-                                let from = date_days_ago(30);
                                 app.research_quote = client.quote(&symbol).await.ok();
-                                app.research_news = client
-                                    .company_news(&symbol, &from, &today)
-                                    .await
-                                    .unwrap_or_default();
-                                app.research_news_focus = 0;
+                                app.research_financials =
+                                    client.basic_financials(&symbol).await.ok();
+                                app.research_filings =
+                                    client.filings(&symbol).await.unwrap_or_default();
+                                app.research_peers =
+                                    client.company_peers(&symbol).await.unwrap_or_default();
+                                app.research_sub_tab = 0;
+                                app.research_filings_focus = 0;
+                                app.research_peers_focus = 0;
                             }
                         }
                         KeyCode::Char(c) => app.research_input_push(c.to_ascii_uppercase()),
@@ -156,23 +158,25 @@ async fn main() {
                         KeyCode::Char(']') => match app.main_tab {
                             0 => app.next_tab(),
                             1 => app.next_news_tab(),
+                            2 => app.next_research_sub_tab(),
                             _ => {}
                         },
                         KeyCode::Char('[') => match app.main_tab {
                             0 => app.prev_tab(),
                             1 => app.prev_news_tab(),
+                            2 => app.prev_research_sub_tab(),
                             _ => {}
                         },
                         KeyCode::Down => match app.main_tab {
                             0 => app.focus_next(),
                             1 => app.news_focus_next(),
-                            2 => app.research_news_focus_next(),
+                            2 => app.research_focus_next(),
                             _ => {}
                         },
                         KeyCode::Up => match app.main_tab {
                             0 => app.focus_prev(),
                             1 => app.news_focus_prev(),
-                            2 => app.research_news_focus_prev(),
+                            2 => app.research_focus_prev(),
                             _ => {}
                         },
                         KeyCode::Enter => {
@@ -187,7 +191,7 @@ async fn main() {
                             }
                         }
                         KeyCode::Char('o') if app.main_tab == 2 => {
-                            if let Some(url) = app.focused_research_news_url() {
+                            if let Some(url) = app.focused_filing_url() {
                                 std::process::Command::new("open").arg(url).spawn().ok();
                             }
                         }

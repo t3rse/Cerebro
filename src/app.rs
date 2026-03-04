@@ -1,12 +1,13 @@
 use std::collections::HashMap;
 
-use headset::{CompanyNews, EarningsReport, MarketNews, StockQuote};
+use headset::{BasicFinancials, EarningsReport, FilingEntry, MarketNews, StockQuote};
 
 use crate::portfolio::Portfolio;
 
 pub const MAIN_TABS: &[&str] = &["Portfolios", "News", "Research", "Calendar"];
 pub const TAB_TITLES: &[&str] = &["Indices", "Schwab", "Robinhood"];
 pub const NEWS_TABS: &[&str] = &["General", "Forex", "Crypto", "Merger"];
+pub const RESEARCH_SUB_TABS: &[&str] = &["Basic Financials", "Filings", "Company Peers"];
 
 const PORTFOLIO_COUNT: usize = 2;
 
@@ -25,8 +26,12 @@ pub struct App {
     pub research_mode: ResearchMode,
     pub research_symbol: Option<String>,
     pub research_quote: Option<StockQuote>,
-    pub research_news: Vec<CompanyNews>,
-    pub research_news_focus: usize,
+    pub research_sub_tab: usize,
+    pub research_financials: Option<BasicFinancials>,
+    pub research_filings: Vec<FilingEntry>,
+    pub research_filings_focus: usize,
+    pub research_peers: Vec<String>,
+    pub research_peers_focus: usize,
     // Navigation
     pub should_quit: bool,
     pub loading: bool,
@@ -48,8 +53,12 @@ impl App {
             research_mode: ResearchMode::Idle,
             research_symbol: None,
             research_quote: None,
-            research_news: Vec::new(),
-            research_news_focus: 0,
+            research_sub_tab: 0,
+            research_financials: None,
+            research_filings: Vec::new(),
+            research_filings_focus: 0,
+            research_peers: Vec::new(),
+            research_peers_focus: 0,
             should_quit: false,
             loading: true,
             main_tab: 0,
@@ -108,22 +117,48 @@ impl App {
         Some(symbol)
     }
 
-    pub fn research_news_focus_next(&mut self) {
-        let len = self.research_news.len();
-        if len == 0 {
-            return;
+    pub fn next_research_sub_tab(&mut self) {
+        self.research_sub_tab = (self.research_sub_tab + 1) % RESEARCH_SUB_TABS.len();
+    }
+
+    pub fn prev_research_sub_tab(&mut self) {
+        if self.research_sub_tab == 0 {
+            self.research_sub_tab = RESEARCH_SUB_TABS.len() - 1;
+        } else {
+            self.research_sub_tab -= 1;
         }
-        self.research_news_focus = (self.research_news_focus + 1).min(len - 1);
     }
 
-    pub fn research_news_focus_prev(&mut self) {
-        self.research_news_focus = self.research_news_focus.saturating_sub(1);
+    pub fn research_focus_next(&mut self) {
+        match self.research_sub_tab {
+            1 => {
+                let len = self.research_filings.len();
+                if len > 0 {
+                    self.research_filings_focus = (self.research_filings_focus + 1).min(len - 1);
+                }
+            }
+            2 => {
+                let len = self.research_peers.len();
+                if len > 0 {
+                    self.research_peers_focus = (self.research_peers_focus + 1).min(len - 1);
+                }
+            }
+            _ => {}
+        }
     }
 
-    pub fn focused_research_news_url(&self) -> Option<&str> {
-        self.research_news
-            .get(self.research_news_focus)
-            .map(|a| a.url.as_str())
+    pub fn research_focus_prev(&mut self) {
+        match self.research_sub_tab {
+            1 => self.research_filings_focus = self.research_filings_focus.saturating_sub(1),
+            2 => self.research_peers_focus = self.research_peers_focus.saturating_sub(1),
+            _ => {}
+        }
+    }
+
+    pub fn focused_filing_url(&self) -> Option<&str> {
+        self.research_filings
+            .get(self.research_filings_focus)
+            .and_then(|f| f.report_url.as_deref().or(f.filing_url.as_deref()))
     }
 
     // ── Main nav ──────────────────────────────────────────────────────────────

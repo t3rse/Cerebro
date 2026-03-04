@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use finnhub::models::calendar::EarningsRelease;
 use finnhub::models::news::CompanyNews as FinnhubCompanyNews;
 use finnhub::models::news::MarketNews as FinnhubMarketNews;
@@ -92,6 +94,20 @@ impl From<FinnhubCompanyNews> for CompanyNews {
             url: n.url,
         }
     }
+}
+
+/// Key financial metrics for a stock.
+pub struct BasicFinancials {
+    pub symbol: String,
+    pub metrics: HashMap<String, serde_json::Value>,
+}
+
+/// A single SEC filing entry.
+pub struct FilingEntry {
+    pub form: Option<String>,
+    pub filed_date: Option<String>,
+    pub report_url: Option<String>,
+    pub filing_url: Option<String>,
 }
 
 /// A single earnings calendar entry.
