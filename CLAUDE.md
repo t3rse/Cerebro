@@ -17,6 +17,11 @@ Cerebro/
 │       ├── lib.rs          # Headset client (quote, market_news, company_news, earnings)
 │       ├── models.rs       # Domain models (StockQuote, MarketNews, CompanyNews, EarningsReport)
 │       └── error.rs        # HeadsetError, Result type alias
+├── rapid/                  # Internal library crate: Economic calendar via RapidAPI
+│   └── src/
+│       ├── lib.rs          # Rapid client (calendar); reads RAPID_API_KEY env var
+│       ├── models.rs       # EconEvent (all fields Option<>), CalendarResponse
+│       └── error.rs        # RapidError (MissingApiKey, Http), Result type alias
 └── examples/               # Sample portfolio JSON files embedded at compile time
     ├── schwab_portfolio.json
     └── robinhood_portfolio.json
@@ -34,7 +39,7 @@ cargo build --release
 
 ## Configuration
 
-- Create a `.env` file in the project root with `FINNHUB_API_KEY=your_key_here`
+- Create a `.env` file in the project root with `FINNHUB_API_KEY=your_key_here` and `RAPID_API_KEY=your_key_here`
 - Portfolio data is embedded at compile time from `examples/schwab_portfolio.json` and `examples/robinhood_portfolio.json`
 - Portfolio JSON schema: `{ "portfolio_name": string, "positions": [{ "ticker", "quantity", "cost_basis", "purchase_date", "currency?" }] }`
 
@@ -58,6 +63,7 @@ cargo build --release
 ## Architecture Notes
 
 - **`headset` crate** is a thin wrapper around the `finnhub` crate, mapping its types to clean domain models. All API calls go through `Headset`. Methods: `quote`, `market_news`, `company_news`, `earnings`, `basic_financials`, `filings`, `company_peers`.
+- **`rapid` crate** wraps the Ultimate Economic Calendar RapidAPI (`ultimate-economic-calendar.p.rapidapi.com`). The `Rapid` client reads `RAPID_API_KEY` from the environment. Single method: `calendar(country: Option<&str>, from: Option<&str>, to: Option<&str>) -> Vec<EconEvent>`. Country is appended as a path segment; date range passed as `from`/`to` query params (`YYYY-MM-DD`). `EconEvent` fields are all `Option<>` to handle sparse API responses.
 - **`App`** holds all application state. Navigation state (`main_tab`, `active_tab`, `news_tab`, focus indices) lives here alongside data (`quotes`, `news_articles`, `portfolios`, etc.).
 - **`ui.rs`** is purely a rendering layer — it reads `&App` and produces ratatui widgets. No state mutation happens here.
 - **`main.rs`** owns the async runtime and event loop. API fetches happen upfront before the TUI starts (blocking on load), then the loop handles key events and render ticks.
@@ -69,5 +75,6 @@ cargo build --release
 - `crossterm` — terminal backend and key event stream
 - `tokio` — async runtime (full features)
 - `headset` (internal) → `finnhub` — financial data API
+- `rapid` (internal) → RapidAPI Ultimate Economic Calendar — economic events
 - `serde` / `serde_json` — portfolio JSON parsing
 - `dotenvy` — `.env` file loading

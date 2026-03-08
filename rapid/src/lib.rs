@@ -9,7 +9,8 @@ pub use error::{RapidError, Result};
 pub use models::EconEvent;
 
 const HOST: &str = "ultimate-economic-calendar.p.rapidapi.com";
-const BASE_URL: &str = "https://ultimate-economic-calendar.p.rapidapi.com";
+const BASE_URL: &str =
+    "https://ultimate-economic-calendar.p.rapidapi.com/economic-events/tradingview";
 
 /// Client for fetching economic calendar data via the Trading Economics RapidAPI.
 pub struct Rapid {
@@ -18,9 +19,9 @@ pub struct Rapid {
 }
 
 impl Rapid {
-    /// Create a new `Rapid` by reading the `RAPIDAPI_KEY` environment variable.
+    /// Create a new `Rapid` by reading the `RAPID_API_KEY` environment variable.
     pub fn new() -> Result<Self> {
-        let api_key = env::var("RAPIDAPI_KEY")?;
+        let api_key = env::var("RAPID_API_KEY")?;
         Ok(Self {
             api_key,
             client: Client::new(),

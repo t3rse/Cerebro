@@ -9,6 +9,8 @@ use std::time::Duration;
 use crossterm::event::KeyCode;
 use headset::{Headset, NewsCategory};
 
+use rapid::Rapid;
+
 use app::App;
 use event::{Event, EventHandler};
 
@@ -62,14 +64,56 @@ fn is_leap(year: u64) -> bool {
     (year % 4 == 0 && year % 100 != 0) || year % 400 == 0
 }
 
+/// Returns a `YYYY-MM-DD` string for `days_ahead` days after today.
+fn date_days_ahead(days_ahead: u64) -> String {
+    let secs = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs()
+        + days_ahead * 86400;
+
+    let mut remaining = secs / 86400;
+    let mut year = 1970u64;
+    loop {
+        let y_days = if is_leap(year) { 366 } else { 365 };
+        if remaining < y_days {
+            break;
+        }
+        remaining -= y_days;
+        year += 1;
+    }
+    let month_days: [u64; 12] = if is_leap(year) {
+        [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+    } else {
+        [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+    };
+    let mut month = 1u64;
+    for &md in &month_days {
+        if remaining < md {
+            break;
+        }
+        remaining -= md;
+        month += 1;
+    }
+    format!("{year:04}-{month:02}-{:02}", remaining + 1)
+}
+
 #[tokio::main]
 async fn main() {
     dotenvy::dotenv().ok();
 
-    let client = match Headset::new() {
+    let headset_client = match Headset::new() {
         Ok(c) => c,
         Err(e) => {
             eprintln!("Failed to create Headset client: {e}");
+            std::process::exit(1);
+        }
+    };
+
+    let rapid_client = match Rapid::new() {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("Failed to create Rapid client: {e}");
             std::process::exit(1);
         }
     };
@@ -93,19 +137,32 @@ async fn main() {
 
     // Fetch index quotes
     for symbol in ["DIA", "SPY", "NDAQ"] {
-        if let Ok(q) = client.quote(symbol).await {
+        if let Ok(q) = headset_client.quote(symbol).await {
             app.quotes.push(q);
         }
     }
 
     // Fetch earnings calendar
-    if let Ok(reports) = client.earnings(None, None, None).await {
+    if let Ok(reports) = headset_client.earnings(None, None, None).await {
         app.earnings = reports;
+    }
+
+    // Fetch economic calendar events for the next 7 days
+    let today = date_days_ago(0);
+    let week_later = date_days_ahead(7);
+    if let Ok(events) = rapid_client
+        .calendar(None, Some(&today), Some(&week_later))
+        .await
+    {
+        app.calendar_events = events;
     }
 
     // Fetch market news for each category (order matches NEWS_TABS)
     for i in 0..4 {
-        if let Ok(articles) = client.market_news(news_tab_to_category(i), None).await {
+        if let Ok(articles) = headset_client
+            .market_news(news_tab_to_category(i), None)
+            .await
+        {
             app.news_articles[i] = articles;
         }
     }
@@ -113,7 +170,7 @@ async fn main() {
     // Fetch portfolio quotes
     let mut portfolio_quotes = HashMap::new();
     for ticker in &portfolio_tickers {
-        if let Ok(q) = client.quote(ticker).await {
+        if let Ok(q) = headset_client.quote(ticker).await {
             portfolio_quotes.insert(ticker.clone(), q);
         }
     }
@@ -134,13 +191,15 @@ async fn main() {
                         KeyCode::Backspace => app.research_input_pop(),
                         KeyCode::Enter => {
                             if let Some(symbol) = app.research_submit() {
-                                app.research_quote = client.quote(&symbol).await.ok();
+                                app.research_quote = headset_client.quote(&symbol).await.ok();
                                 app.research_financials =
-                                    client.basic_financials(&symbol).await.ok();
+                                    headset_client.basic_financials(&symbol).await.ok();
                                 app.research_filings =
-                                    client.filings(&symbol).await.unwrap_or_default();
-                                app.research_peers =
-                                    client.company_peers(&symbol).await.unwrap_or_default();
+                                    headset_client.filings(&symbol).await.unwrap_or_default();
+                                app.research_peers = headset_client
+                                    .company_peers(&symbol)
+                                    .await
+                                    .unwrap_or_default();
                                 app.research_sub_tab = 0;
                                 app.research_filings_focus = 0;
                                 app.research_peers_focus = 0;
@@ -171,12 +230,14 @@ async fn main() {
                             0 => app.focus_next(),
                             1 => app.news_focus_next(),
                             2 => app.research_focus_next(),
+                            3 => app.calendar_focus_next(),
                             _ => {}
                         },
                         KeyCode::Up => match app.main_tab {
                             0 => app.focus_prev(),
                             1 => app.news_focus_prev(),
                             2 => app.research_focus_prev(),
+                            3 => app.calendar_focus_prev(),
                             _ => {}
                         },
                         KeyCode::Enter => {
@@ -197,8 +258,9 @@ async fn main() {
                         }
                         KeyCode::Char('r') if app.main_tab == 1 => {
                             let tab = app.news_tab;
-                            if let Ok(articles) =
-                                client.market_news(news_tab_to_category(tab), None).await
+                            if let Ok(articles) = headset_client
+                                .market_news(news_tab_to_category(tab), None)
+                                .await
                             {
                                 app.news_articles[tab] = articles;
                                 app.news_focus = 0;

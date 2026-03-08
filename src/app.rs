@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use headset::{BasicFinancials, EarningsReport, FilingEntry, MarketNews, StockQuote};
+use rapid::EconEvent;
 
 use crate::portfolio::Portfolio;
 
@@ -32,6 +33,9 @@ pub struct App {
     pub research_filings_focus: usize,
     pub research_peers: Vec<String>,
     pub research_peers_focus: usize,
+    // Calendar
+    pub calendar_events: Vec<EconEvent>,
+    pub calendar_focus: usize,
     // Navigation
     pub should_quit: bool,
     pub loading: bool,
@@ -59,6 +63,8 @@ impl App {
             research_filings_focus: 0,
             research_peers: Vec::new(),
             research_peers_focus: 0,
+            calendar_events: Vec::new(),
+            calendar_focus: 0,
             should_quit: false,
             loading: true,
             main_tab: 0,
@@ -266,5 +272,18 @@ impl App {
             .positions
             .get(pos_idx)
             .map(|p| p.ticker.as_str())
+    }
+
+    // ── Calendar ──────────────────────────────────────────────────────────────
+
+    pub fn calendar_focus_next(&mut self) {
+        let len = self.calendar_events.len();
+        if len > 0 {
+            self.calendar_focus = (self.calendar_focus + 1).min(len - 1);
+        }
+    }
+
+    pub fn calendar_focus_prev(&mut self) {
+        self.calendar_focus = self.calendar_focus.saturating_sub(1);
     }
 }

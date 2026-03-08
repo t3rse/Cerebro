@@ -10,6 +10,7 @@ dependencies = [
  "dotenvy",
  "futures",
  "headset",
+ "rapid",
  "ratatui",
  "serde",
  "serde_json",

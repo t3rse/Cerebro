@@ -63,6 +63,7 @@ pub fn render(frame: &mut Frame, app: &App) {
             },
             1 => render_news_tab(frame, app, content_area),
             2 => render_research_tab(frame, app, content_area),
+            3 => render_calendar_tab(frame, app, content_area),
             _ => render_placeholder(frame, app, content_area),
         }
     }
@@ -566,6 +567,171 @@ fn word_wrap(text: &str, width: usize) -> Vec<String> {
     lines
 }
 
+// ── Calendar tab ──────────────────────────────────────────────────────────────
+
+fn render_calendar_tab(frame: &mut Frame, app: &App, area: ratatui::layout::Rect) {
+    let panes =
+        Layout::horizontal([Constraint::Percentage(40), Constraint::Percentage(60)]).split(area);
+
+    render_calendar_list(frame, app, panes[0]);
+    render_calendar_detail(frame, app, panes[1]);
+}
+
+fn render_calendar_list(frame: &mut Frame, app: &App, area: ratatui::layout::Rect) {
+    let events = &app.calendar_events;
+    let inner_width = area.width.saturating_sub(4) as usize;
+
+    let items: Vec<ListItem> = events
+        .iter()
+        .map(|ev| {
+            let indicator = ev.indicator.as_deref().unwrap_or("—");
+            let country = ev.country.as_deref().unwrap_or("—");
+            let date = ev.date.as_deref().unwrap_or("—");
+            // Trim to HH:MM if date contains a time component
+            let date_display = date.get(..10).unwrap_or(date);
+
+            let importance_marker = match ev.importance {
+                Some(3) => Span::styled("● ", Style::default().fg(Color::Red)),
+                Some(2) => Span::styled("● ", Style::default().fg(Color::Yellow)),
+                _ => Span::styled("● ", Style::default().fg(Color::DarkGray)),
+            };
+
+            let title_line = Line::from(vec![
+                importance_marker,
+                Span::styled(
+                    truncate(indicator, inner_width.saturating_sub(2)),
+                    Style::default().add_modifier(Modifier::BOLD),
+                ),
+            ]);
+            let meta_line = Line::from(Span::styled(
+                format!("{country}  {date_display}"),
+                Style::default().fg(Color::DarkGray),
+            ));
+
+            ListItem::new(Text::from(vec![title_line, meta_line, Line::raw("")]))
+        })
+        .collect();
+
+    let list = List::new(items)
+        .block(
+            Block::default()
+                .title(" Economic Calendar ")
+                .borders(Borders::ALL),
+        )
+        .highlight_style(
+            Style::default()
+                .bg(Color::DarkGray)
+                .add_modifier(Modifier::BOLD),
+        )
+        .highlight_symbol("▶ ");
+
+    let mut state = ListState::default();
+    if !events.is_empty() {
+        state.select(Some(app.calendar_focus));
+    }
+    frame.render_stateful_widget(list, area, &mut state);
+}
+
+fn render_calendar_detail(frame: &mut Frame, app: &App, area: ratatui::layout::Rect) {
+    let events = &app.calendar_events;
+
+    if events.is_empty() {
+        frame.render_widget(
+            Paragraph::new("No economic events available.")
+                .block(Block::default().borders(Borders::ALL)),
+            area,
+        );
+        return;
+    }
+
+    let ev = &events[app.calendar_focus.min(events.len() - 1)];
+
+    let indicator = ev.indicator.as_deref().unwrap_or("—");
+    let country = ev.country.as_deref().unwrap_or("—");
+    let date = ev.date.as_deref().unwrap_or("—");
+    let currency = ev.currency.as_deref().unwrap_or("—");
+    let source = ev.source.as_deref().unwrap_or("—");
+    let period = ev.period.as_deref().unwrap_or("—");
+    let unit = ev.unit.as_deref().unwrap_or("—");
+    let scale = ev.scale.as_deref().unwrap_or("—");
+    let importance_str = match ev.importance {
+        Some(3) => "High",
+        Some(2) => "Medium",
+        Some(1) => "Low",
+        _ => "—",
+    };
+    let importance_color = match ev.importance {
+        Some(3) => Color::Red,
+        Some(2) => Color::Yellow,
+        _ => Color::White,
+    };
+
+    let fmt_opt = |v: Option<f64>| v.map_or("—".to_string(), |x| format!("{x:.2}"));
+
+    let sep = "─".repeat(area.width.saturating_sub(2) as usize);
+
+    let mut lines: Vec<Line> = vec![
+        Line::raw(""),
+        Line::from(Span::styled(
+            indicator.to_string(),
+            Style::default().add_modifier(Modifier::BOLD),
+        )),
+        Line::raw(""),
+        Line::from(Span::styled(
+            format!("  {country}  ·  {date}  ·  {currency}"),
+            Style::default().add_modifier(Modifier::DIM),
+        )),
+        Line::raw(sep),
+        Line::raw(""),
+        Line::from(vec![
+            Span::styled("  Importance  ", Style::default().fg(Color::Yellow)),
+            Span::styled(importance_str, Style::default().fg(importance_color)),
+        ]),
+        Line::from(vec![
+            Span::styled("  Period      ", Style::default().fg(Color::Yellow)),
+            Span::raw(period.to_string()),
+        ]),
+        Line::from(vec![
+            Span::styled("  Source      ", Style::default().fg(Color::Yellow)),
+            Span::raw(source.to_string()),
+        ]),
+        Line::from(vec![
+            Span::styled("  Unit        ", Style::default().fg(Color::Yellow)),
+            Span::raw(format!("{unit}  (scale: {scale})")),
+        ]),
+        Line::raw(""),
+        Line::from(vec![
+            Span::styled("  Actual      ", Style::default().fg(Color::Yellow)),
+            Span::raw(fmt_opt(ev.actual)),
+        ]),
+        Line::from(vec![
+            Span::styled("  Forecast    ", Style::default().fg(Color::Yellow)),
+            Span::raw(fmt_opt(ev.forecast)),
+        ]),
+        Line::from(vec![
+            Span::styled("  Previous    ", Style::default().fg(Color::Yellow)),
+            Span::raw(fmt_opt(ev.previous)),
+        ]),
+    ];
+
+    if let Some(ref comment) = ev.comment {
+        if !comment.is_empty() {
+            let width = area.width.saturating_sub(4) as usize;
+            lines.push(Line::raw(""));
+            for wrapped in word_wrap(comment, width) {
+                lines.push(Line::raw(format!("  {wrapped}")));
+            }
+        }
+    }
+
+    frame.render_widget(
+        Paragraph::new(lines)
+            .block(Block::default().borders(Borders::ALL))
+            .wrap(Wrap { trim: false }),
+        area,
+    );
+}
+
 fn render_placeholder(frame: &mut Frame, app: &App, area: ratatui::layout::Rect) {
     let label = MAIN_TABS[app.main_tab];
     let p = Paragraph::new(format!("{label} — coming soon"))
@@ -754,6 +920,7 @@ fn render_status_bar(frame: &mut Frame, app: &App, area: ratatui::layout::Rect) 
                     }
                 }
             }
+            3 => s.extend([Span::raw("  "), key("↑ ↓"), Span::raw("navigate")]),
             _ => {}
         }
         s
