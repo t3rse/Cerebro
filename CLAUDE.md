@@ -13,20 +13,26 @@ Cerebro/
 │   ├── event.rs            # Async event handler (key events + render/tick timers)
 │   └── portfolio.rs        # Portfolio/Position data structures (serde Deserialize)
 ├── headset/                # Internal library crate: Finnhub API client wrapper
-│   └── src/
-│       ├── lib.rs          # Headset client (quote, market_news, company_news, earnings, basic_financials, filings, company_peers)
-│       ├── models.rs       # Domain models (StockQuote, MarketNews, CompanyNews, EarningsReport, BasicFinancials, FilingEntry)
-│       └── error.rs        # HeadsetError, Result type alias
+│   ├── src/
+│   │   ├── lib.rs          # Headset client (quote, market_news, company_news, earnings, basic_financials, filings, company_peers)
+│   │   ├── models.rs       # Domain models (StockQuote, MarketNews, CompanyNews, EarningsReport, BasicFinancials, FilingEntry)
+│   │   └── error.rs        # HeadsetError, Result type alias
+│   └── tests/
+│       └── integration.rs  # Integration tests (1 unit + 9 network, #[ignore])
 ├── rapid/                  # Internal library crate: Economic calendar via RapidAPI
-│   └── src/
-│       ├── lib.rs          # Rapid client (calendar); reads RAPID_API_KEY env var
-│       ├── models.rs       # EconEvent (all fields Option<>), CalendarResponse
-│       └── error.rs        # RapidError (MissingApiKey, Http), Result type alias
+│   ├── src/
+│   │   ├── lib.rs          # Rapid client (calendar); reads RAPID_API_KEY env var
+│   │   ├── models.rs       # EconEvent (all fields Option<>), CalendarResponse
+│   │   └── error.rs        # RapidError (MissingApiKey, Http), Result type alias
+│   └── tests/
+│       └── integration.rs  # Integration tests (1 unit + 4 network, #[ignore])
 ├── ydata/                  # Internal library crate: Yahoo Finance historical data
-│   └── src/
-│       ├── lib.rs          # YData client (get_quote_history); wraps yahoo_finance_api
-│       ├── models.rs       # Domain model (QuoteBar: timestamp, open, high, low, close, adjclose, volume)
-│       └── error.rs        # YDataError (Yahoo), Result type alias
+│   ├── src/
+│   │   ├── lib.rs          # YData client (get_quote_history); wraps yahoo_finance_api
+│   │   ├── models.rs       # Domain model (QuoteBar: timestamp, open, high, low, close, adjclose, volume)
+│   │   └── error.rs        # YDataError (Yahoo), Result type alias
+│   └── tests/
+│       └── integration.rs  # Integration tests (1 unit + 4 network, #[ignore])
 └── examples/               # Sample portfolio JSON files embedded at compile time
     ├── schwab_portfolio.json
     └── robinhood_portfolio.json
@@ -40,6 +46,17 @@ cargo run
 
 # Build release binary
 cargo build --release
+
+# Generate and open rustdoc for all library crates
+cargo doc --no-deps --open
+
+# Run all tests (unit + doctests; network tests are skipped by default)
+cargo test
+
+# Run network integration tests for a specific crate (requires API keys / network)
+cargo test -p headset -- --include-ignored
+cargo test -p rapid   -- --include-ignored
+cargo test -p ydata   -- --include-ignored
 ```
 
 ## Configuration
@@ -65,6 +82,21 @@ cargo build --release
 | `↑ ↓` | Navigate filings list or peers list (Research tab) |
 | `o` | Open focused SEC filing URL in browser (Filings sub-tab) |
 | `↑ ↓` | Navigate economic calendar events (Calendar tab) |
+
+## Testing
+
+Each library crate has an integration test file at `<crate>/tests/integration.rs`.  Tests fall into two categories:
+
+- **Unit tests** — run with `cargo test`, no keys or network needed.
+- **Network tests** — marked `#[ignore]`; require env vars and a live connection.  Run with `--include-ignored`.
+
+| Crate | Unit tests | Network tests (ignored) |
+|-------|-----------|------------------------|
+| `headset` | `missing_api_key_error_display` | `quote`, `market_news`, `market_news_pagination`, `company_news`, `basic_financials`, `filings`, `company_peers`, `earnings` (×2) |
+| `rapid` | `missing_api_key_error_display` | `calendar_us_with_date_range`, `calendar_no_filter`, `calendar_event_has_title_and_date`, `calendar_importance_in_known_range` |
+| `ydata` | `result_alias_ok_works` | `get_quote_history_returns_bars`, `bars_are_chronological`, `adjclose_near_close`, `invalid_ticker_returns_error` |
+
+Doctests in each `lib.rs` are compiled and run as `no_run` examples via `cargo test`.
 
 ## Architecture Notes
 
