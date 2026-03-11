@@ -22,6 +22,11 @@ Cerebro/
 │       ├── lib.rs          # Rapid client (calendar); reads RAPID_API_KEY env var
 │       ├── models.rs       # EconEvent (all fields Option<>), CalendarResponse
 │       └── error.rs        # RapidError (MissingApiKey, Http), Result type alias
+├── ydata/                  # Internal library crate: Yahoo Finance historical data
+│   └── src/
+│       ├── lib.rs          # YData client (get_quote_history); wraps yahoo_finance_api
+│       ├── models.rs       # Domain model (QuoteBar: timestamp, open, high, low, close, adjclose, volume)
+│       └── error.rs        # YDataError (Yahoo), Result type alias
 └── examples/               # Sample portfolio JSON files embedded at compile time
     ├── schwab_portfolio.json
     └── robinhood_portfolio.json
@@ -64,6 +69,7 @@ cargo build --release
 ## Architecture Notes
 
 - **`headset` crate** is a thin wrapper around the `finnhub` crate, mapping its types to clean domain models. All API calls go through `Headset`. Methods: `quote`, `market_news`, `company_news`, `earnings`, `basic_financials`, `filings`, `company_peers`.
+- **`ydata` crate** wraps `yahoo_finance_api`. `YData::new()` creates a client. Single method: `get_quote_history(ticker: &str, start: OffsetDateTime, end: OffsetDateTime) -> Vec<QuoteBar>`. Returns daily OHLCV bars. No API key required.
 - **`rapid` crate** wraps the Ultimate Economic Calendar RapidAPI (`ultimate-economic-calendar.p.rapidapi.com`). The `Rapid` client reads `RAPID_API_KEY` from the environment. Single method: `calendar(country: Option<&str>, from: Option<&str>, to: Option<&str>) -> Vec<EconEvent>`. Country is appended as a path segment; date range passed as `from`/`to` query params (`YYYY-MM-DD`). `EconEvent` fields are all `Option<>` to handle sparse API responses.
 - **`App`** holds all application state. Navigation state (`main_tab`, `active_tab`, `news_tab`, focus indices) lives here alongside data (`quotes`, `news_articles`, `portfolios`, etc.).
 - **`ui.rs`** is purely a rendering layer — it reads `&App` and produces ratatui widgets. No state mutation happens here.
@@ -77,5 +83,6 @@ cargo build --release
 - `tokio` — async runtime (full features)
 - `headset` (internal) → `finnhub` — financial data API
 - `rapid` (internal) → RapidAPI Ultimate Economic Calendar — economic events
+- `ydata` (internal) → `yahoo_finance_api` — historical OHLCV data
 - `serde` / `serde_json` — portfolio JSON parsing
 - `dotenvy` — `.env` file loading
