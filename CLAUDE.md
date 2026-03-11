@@ -14,8 +14,8 @@ Cerebro/
 │   └── portfolio.rs        # Portfolio/Position data structures (serde Deserialize)
 ├── headset/                # Internal library crate: Finnhub API client wrapper
 │   └── src/
-│       ├── lib.rs          # Headset client (quote, market_news, company_news, earnings)
-│       ├── models.rs       # Domain models (StockQuote, MarketNews, CompanyNews, EarningsReport)
+│       ├── lib.rs          # Headset client (quote, market_news, company_news, earnings, basic_financials, filings, company_peers)
+│       ├── models.rs       # Domain models (StockQuote, MarketNews, CompanyNews, EarningsReport, BasicFinancials, FilingEntry)
 │       └── error.rs        # HeadsetError, Result type alias
 ├── rapid/                  # Internal library crate: Economic calendar via RapidAPI
 │   └── src/
@@ -59,6 +59,7 @@ cargo build --release
 | `[ ]` | Switch research sub-tab (Basic Financials / Filings / Company Peers) |
 | `↑ ↓` | Navigate filings list or peers list (Research tab) |
 | `o` | Open focused SEC filing URL in browser (Filings sub-tab) |
+| `↑ ↓` | Navigate economic calendar events (Calendar tab) |
 
 ## Architecture Notes
 
