@@ -33,6 +33,13 @@ Cerebro/
 │   │   └── error.rs        # YDataError (Yahoo), Result type alias
 │   └── tests/
 │       └── integration.rs  # Integration tests (1 unit + 4 network, #[ignore])
+├── hodl/                   # Internal library crate: Crypto.com Exchange public REST API client
+│   ├── src/
+│   │   ├── lib.rs          # Hodl client (get_instruments, get_book, get_candlestick, get_trades, get_tickers, get_valuations)
+│   │   ├── models.rs       # Domain models (Instrument, OrderBook, BookLevel, Candle, Trade, Ticker, Valuation)
+│   │   └── error.rs        # HodlError (Http, Api), Result type alias
+│   └── tests/
+│       └── integration.rs  # Integration tests (2 unit + 6 network, #[ignore])
 └── examples/               # Sample portfolio JSON files embedded at compile time
     ├── schwab_portfolio.json
     └── robinhood_portfolio.json
@@ -57,6 +64,7 @@ cargo test
 cargo test -p headset -- --include-ignored
 cargo test -p rapid   -- --include-ignored
 cargo test -p ydata   -- --include-ignored
+cargo test -p hodl    -- --include-ignored
 ```
 
 ## Configuration
@@ -95,6 +103,7 @@ Each library crate has an integration test file at `<crate>/tests/integration.rs
 | `headset` | `missing_api_key_error_display` | `quote`, `market_news`, `market_news_pagination`, `company_news`, `basic_financials`, `filings`, `company_peers`, `earnings` (×2) |
 | `rapid` | `missing_api_key_error_display` | `calendar_us_with_date_range`, `calendar_no_filter`, `calendar_event_has_title_and_date`, `calendar_importance_in_known_range` |
 | `ydata` | `result_alias_ok_works` | `get_quote_history_returns_bars`, `bars_are_chronological`, `adjclose_near_close`, `invalid_ticker_returns_error` |
+| `hodl` | `result_alias_ok_works`, `error_display_api` | `get_instruments_returns_data`, `get_book_returns_bids_and_asks`, `get_candlestick_returns_candles`, `get_trades_returns_trades`, `get_tickers_all_returns_many`, `get_tickers_single_returns_one`, `get_valuations_index_price` |
 
 Doctests in each `lib.rs` are compiled and run as `no_run` examples via `cargo test`.
 
@@ -103,6 +112,7 @@ Doctests in each `lib.rs` are compiled and run as `no_run` examples via `cargo t
 - **`headset` crate** is a thin wrapper around the `finnhub` crate, mapping its types to clean domain models. All API calls go through `Headset`. Methods: `quote`, `market_news`, `company_news`, `earnings`, `basic_financials`, `filings`, `company_peers`.
 - **`ydata` crate** wraps `yahoo_finance_api`. `YData::new()` creates a client. Single method: `get_quote_history(ticker: &str, start: OffsetDateTime, end: OffsetDateTime) -> Vec<QuoteBar>`. Returns daily OHLCV bars. No API key required.
 - **`rapid` crate** wraps the Ultimate Economic Calendar RapidAPI (`ultimate-economic-calendar.p.rapidapi.com`). The `Rapid` client reads `RAPID_API_KEY` from the environment. Single method: `calendar(country: Option<&str>, from: Option<&str>, to: Option<&str>) -> Vec<EconEvent>`. Country is appended as a path segment; date range passed as `from`/`to` query params (`YYYY-MM-DD`). `EconEvent` fields are all `Option<>` to handle sparse API responses.
+- **`hodl` crate** wraps the Crypto.com Exchange public REST API (`api.crypto.com/exchange/v1`). No API key required. `Hodl::new()` creates a client. Methods: `get_instruments()`, `get_book(instrument_name, depth)`, `get_candlestick(instrument_name, timeframe, count)`, `get_trades(instrument_name, count)`, `get_tickers(instrument_name)`, `get_valuations(instrument_name, valuation_type, count)`.
 - **`App`** holds all application state. Navigation state (`main_tab`, `active_tab`, `news_tab`, focus indices) lives here alongside data (`quotes`, `news_articles`, `portfolios`, etc.).
 - **`ui.rs`** is purely a rendering layer — it reads `&App` and produces ratatui widgets. No state mutation happens here.
 - **`main.rs`** owns the async runtime and event loop. API fetches happen upfront before the TUI starts (blocking on load), then the loop handles key events and render ticks.
@@ -116,5 +126,6 @@ Doctests in each `lib.rs` are compiled and run as `no_run` examples via `cargo t
 - `headset` (internal) → `finnhub` — financial data API
 - `rapid` (internal) → RapidAPI Ultimate Economic Calendar — economic events
 - `ydata` (internal) → `yahoo_finance_api` — historical OHLCV data
+- `hodl` (internal) → Crypto.com Exchange REST API — crypto market data (no key required)
 - `serde` / `serde_json` — portfolio JSON parsing
 - `dotenvy` — `.env` file loading

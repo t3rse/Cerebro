@@ -13,6 +13,7 @@ use rapid::Rapid;
 
 use app::App;
 use event::{Event, EventHandler};
+use hodl::Hodl;
 
 const SCHWAB_JSON: &str = include_str!("../examples/schwab_portfolio.json");
 const ROBINHOOD_JSON: &str = include_str!("../examples/robinhood_portfolio.json");
@@ -101,6 +102,12 @@ fn date_days_ahead(days_ahead: u64) -> String {
 #[tokio::main]
 async fn main() {
     dotenvy::dotenv().ok();
+
+    let client = Hodl::new();
+
+//    let bdata = client.get_tickers(Some("BTCUSD-PERP")).await.unwrap();
+//    let candles = client.get_candlestick("BTC_USDT", Some("1h"), Some(24)).await.unwrap();
+
 
     let headset_client = match Headset::new() {
         Ok(c) => c,

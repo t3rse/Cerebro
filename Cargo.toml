@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [workspace]
-members = ["headset", "rapid", "ydata"]
+members = ["headset", "rapid", "ydata", "hodl"]
 
 [dependencies]
 crossterm = { version = "0.28", features = ["event-stream"] }
@@ -16,3 +16,4 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1", features = ["full"] }
 rapid = { path = "rapid" }
+hodl = { path = "hodl"}
