@@ -1,3 +1,22 @@
+use std::collections::HashMap;
+use time::OffsetDateTime;
+
+/// A snapshot of market data for a set of tickers over a time window.
+///
+/// Created via [`crate::MarketSnapshot::new`] (defaults to today's market open →
+/// now) or [`crate::MarketSnapshot::fetch`] for an explicit range.
+///
+/// The `data` map holds the [`QuoteBar`] slices keyed by ticker symbol.
+#[derive(Debug, Clone)]
+pub struct MarketSnapshot {
+    /// Historical bars keyed by ticker symbol.
+    pub data: HashMap<String, Vec<QuoteBar>>,
+    /// Start of the time window used to fetch data.
+    pub start: OffsetDateTime,
+    /// End of the time window used to fetch data.
+    pub end: OffsetDateTime,
+}
+
 /// A single historical OHLCV bar for a stock.
 ///
 /// Returned by [`crate::YData::get_quote_history`].  Bars are daily and

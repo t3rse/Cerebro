@@ -1,11 +1,11 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 use headset::{BasicFinancials, EarningsReport, FilingEntry, MarketNews, StockQuote};
 use rapid::EconEvent;
-
+use ydata::MarketSnapshot;
 use crate::portfolio::Portfolio;
 
-pub const MAIN_TABS: &[&str] = &["Portfolios", "News", "Research", "Calendar"];
+pub const MAIN_TABS: &[&str] = &["Markets Overview", "Portfolios", "News", "Research", "Calendar"];
 pub const TAB_TITLES: &[&str] = &["Indices", "Schwab", "Robinhood"];
 pub const NEWS_TABS: &[&str] = &["General", "Forex", "Crypto", "Merger"];
 pub const RESEARCH_SUB_TABS: &[&str] = &["Basic Financials", "Filings", "Company Peers"];
@@ -18,6 +18,7 @@ pub enum ResearchMode {
 }
 
 pub struct App {
+    pub market_snapshots: BTreeMap<String, MarketSnapshot>,
     pub quotes: Vec<StockQuote>,
     pub earnings: Vec<EarningsReport>,
     pub portfolios: Vec<Portfolio>,
@@ -33,6 +34,9 @@ pub struct App {
     pub research_filings_focus: usize,
     pub research_peers: Vec<String>,
     pub research_peers_focus: usize,
+    // Markets Overview
+    pub markets_col: usize,
+    pub markets_row: Vec<usize>,
     // Calendar
     pub calendar_events: Vec<EconEvent>,
     pub calendar_focus: usize,
@@ -49,6 +53,7 @@ pub struct App {
 impl App {
     pub fn new() -> Self {
         Self {
+            market_snapshots: BTreeMap::new(),
             quotes: Vec::new(),
             earnings: Vec::new(),
             portfolios: Vec::new(),
@@ -63,6 +68,8 @@ impl App {
             research_filings_focus: 0,
             research_peers: Vec::new(),
             research_peers_focus: 0,
+            markets_col: 0,
+            markets_row: Vec::new(),
             calendar_events: Vec::new(),
             calendar_focus: 0,
             should_quit: false,
@@ -233,7 +240,7 @@ impl App {
     // ── Portfolio position focus ──────────────────────────────────────────────
 
     fn portfolio_idx(&self) -> Option<usize> {
-        if self.main_tab != 0 || self.active_tab == 0 {
+        if self.main_tab != 1 || self.active_tab == 0 {
             None
         } else {
             Some(self.active_tab - 1)
@@ -272,6 +279,46 @@ impl App {
             .positions
             .get(pos_idx)
             .map(|p| p.ticker.as_str())
+    }
+
+    // ── Markets Overview ──────────────────────────────────────────────────────
+
+    pub fn markets_col_next(&mut self) {
+        let count = self.market_snapshots.len();
+        if count > 0 {
+            self.markets_col = (self.markets_col + 1) % count;
+        }
+    }
+
+    pub fn markets_col_prev(&mut self) {
+        let count = self.market_snapshots.len();
+        if count == 0 {
+            return;
+        }
+        if self.markets_col == 0 {
+            self.markets_col = count - 1;
+        } else {
+            self.markets_col -= 1;
+        }
+    }
+
+    pub fn markets_row_next(&mut self) {
+        let col = self.markets_col;
+        if let Some(snapshot) = self.market_snapshots.values().nth(col) {
+            let len = snapshot.data.len();
+            if len > 0 {
+                if let Some(row) = self.markets_row.get_mut(col) {
+                    *row = (*row + 1).min(len - 1);
+                }
+            }
+        }
+    }
+
+    pub fn markets_row_prev(&mut self) {
+        let col = self.markets_col;
+        if let Some(row) = self.markets_row.get_mut(col) {
+            *row = row.saturating_sub(1);
+        }
     }
 
     // ── Calendar ──────────────────────────────────────────────────────────────

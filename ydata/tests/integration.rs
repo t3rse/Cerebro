@@ -8,7 +8,7 @@
 //! ```
 
 use time::{Duration, OffsetDateTime};
-use ydata::{YData, YDataError};
+use ydata::{MarketSnapshot, YData, YDataError};
 
 // ── Unit tests (no network) ───────────────────────────────────────────────────
 
@@ -76,6 +76,55 @@ async fn get_quote_history_adjclose_near_close() {
             "adjclose/close ratio out of range: {ratio}"
         );
     }
+}
+
+// ── MarketSnapshot integration tests ──────────────────────────────────────────
+
+#[tokio::test]
+#[ignore = "requires network access"]
+async fn market_snapshot_new_contains_all_tickers() {
+    let client = YData::new();
+    let tickers = vec!["AAPL", "MSFT", "SPY"];
+    let snapshot = MarketSnapshot::new(&client, tickers.clone())
+        .await
+        .expect("MarketSnapshot::new failed");
+    for ticker in &tickers {
+        assert!(
+            snapshot.data.contains_key(*ticker),
+            "expected ticker {ticker} in snapshot"
+        );
+    }
+}
+
+#[tokio::test]
+#[ignore = "requires network access"]
+async fn market_snapshot_fetch_explicit_range() {
+    let client = YData::new();
+    let end = OffsetDateTime::now_utc();
+    let start = end - Duration::days(30);
+    let snapshot = MarketSnapshot::fetch(&client, vec!["SPY", "QQQ"], start, end)
+        .await
+        .expect("MarketSnapshot::fetch failed");
+    assert_eq!(snapshot.start, start);
+    assert_eq!(snapshot.end, end);
+    for bars in snapshot.data.values() {
+        assert!(!bars.is_empty(), "expected bars for each ticker");
+        for bar in bars {
+            assert!(bar.high >= bar.low, "high should be >= low");
+        }
+    }
+}
+
+#[tokio::test]
+#[ignore = "requires network access"]
+async fn market_snapshot_invalid_ticker_returns_error() {
+    let client = YData::new();
+    let result = MarketSnapshot::new(&client, vec!["ZZZZINVALIDTICKER999"]).await;
+    assert!(result.is_err(), "expected an error for an invalid ticker");
+    assert!(
+        matches!(result.unwrap_err(), YDataError::Yahoo(_)),
+        "error should be YDataError::Yahoo"
+    );
 }
 
 #[tokio::test]

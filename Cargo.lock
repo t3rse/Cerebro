@@ -15,7 +15,9 @@ dependencies = [
  "ratatui",
  "serde",
  "serde_json",
+ "time",
  "tokio",
+ "ydata",
 ]
 
 [[package]]
