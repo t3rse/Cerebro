@@ -1,11 +1,17 @@
 use std::collections::{BTreeMap, HashMap};
 
+use crate::portfolio::Portfolio;
 use headset::{BasicFinancials, EarningsReport, FilingEntry, MarketNews, StockQuote};
 use rapid::EconEvent;
 use ydata::MarketSnapshot;
-use crate::portfolio::Portfolio;
 
-pub const MAIN_TABS: &[&str] = &["Markets Overview", "Portfolios", "News", "Research", "Calendar"];
+pub const MAIN_TABS: &[&str] = &[
+    "Markets Overview",
+    "Portfolios",
+    "News",
+    "Research",
+    "Calendar",
+];
 pub const TAB_TITLES: &[&str] = &["Indices", "Schwab", "Robinhood"];
 pub const NEWS_TABS: &[&str] = &["General", "Forex", "Crypto", "Merger"];
 pub const RESEARCH_SUB_TABS: &[&str] = &["Basic Financials", "Filings", "Company Peers"];

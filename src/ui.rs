@@ -1,6 +1,4 @@
 use crate::app::{App, MAIN_TABS, NEWS_TABS, RESEARCH_SUB_TABS, TAB_TITLES};
-use time::OffsetDateTime;
-use ydata::{MarketSnapshot, QuoteBar};
 use ratatui::text::Text;
 use ratatui::{
     Frame,
@@ -8,10 +6,12 @@ use ratatui::{
     style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{
-        Bar, BarChart, BarGroup, Block, Borders, Cell, List, ListItem, ListState, Paragraph, Row,
-        Table, TableState, Tabs, Wrap,
+        Axis, Block, Borders, Cell, Chart, Dataset, GraphType, List, ListItem, ListState,
+        Paragraph, Row, Table, TableState, Tabs, Wrap,
     },
 };
+use time::OffsetDateTime;
+use ydata::{MarketSnapshot, QuoteBar};
 
 pub fn render(frame: &mut Frame, app: &App) {
     // Portfolios (1) and News (2) both have a sub-tabs row.
@@ -738,8 +738,7 @@ fn render_calendar_detail(frame: &mut Frame, app: &App, area: ratatui::layout::R
 fn render_markets_overview_tab(frame: &mut Frame, app: &App, area: ratatui::layout::Rect) {
     if app.market_snapshots.is_empty() {
         frame.render_widget(
-            Paragraph::new("No market data loaded.")
-                .block(Block::default().borders(Borders::ALL)),
+            Paragraph::new("No market data loaded.").block(Block::default().borders(Borders::ALL)),
             area,
         );
         return;
@@ -859,7 +858,10 @@ fn render_price_chart(frame: &mut Frame, app: &App, area: ratatui::layout::Rect)
         tickers.sort();
         let row = app.markets_row.get(col).copied().unwrap_or(0);
         tickers.get(row).and_then(|ticker| {
-            snapshot.data.get(*ticker).map(|bars| (*ticker, bars.as_slice()))
+            snapshot
+                .data
+                .get(*ticker)
+                .map(|bars| (*ticker, bars.as_slice()))
         })
     });
 
@@ -870,55 +872,79 @@ fn render_price_chart(frame: &mut Frame, app: &App, area: ratatui::layout::Rect)
 
     if bars.is_empty() {
         frame.render_widget(
-            Paragraph::new("No data.")
-                .block(Block::default().title(format!(" {ticker} ")).borders(Borders::ALL)),
+            Paragraph::new("No data.").block(
+                Block::default()
+                    .title(format!(" {ticker} "))
+                    .borders(Borders::ALL),
+            ),
             area,
         );
         return;
     }
 
-    render_bars(frame, ticker, bars, area);
+    render_line_chart(frame, ticker, bars, area);
 }
 
-fn render_bars(frame: &mut Frame, ticker: &str, bars: &[QuoteBar], area: ratatui::layout::Rect) {
-    let max_val = bars
+fn render_line_chart(
+    frame: &mut Frame,
+    ticker: &str,
+    bars: &[QuoteBar],
+    area: ratatui::layout::Rect,
+) {
+    let points: Vec<(f64, f64)> = bars
         .iter()
-        .map(|b| (b.close * 100.0) as u64)
-        .max()
-        .unwrap_or(1);
-
-    let bar_items: Vec<Bar> = bars
-        .iter()
-        .map(|b| {
-            let value = (b.close * 100.0) as u64;
-            let color = if b.close >= b.open {
-                Color::Green
-            } else {
-                Color::Red
-            };
-            let label = OffsetDateTime::from_unix_timestamp(b.timestamp)
-                .map(|dt| format!("{}/{}", dt.month() as u8, dt.day()))
-                .unwrap_or_default();
-            Bar::default()
-                .value(value)
-                .text_value(String::new())
-                .label(Line::from(label))
-                .style(Style::default().fg(color))
-        })
+        .enumerate()
+        .map(|(i, b)| (i as f64, b.close))
         .collect();
 
-    let group = BarGroup::default().bars(&bar_items);
+    let min_close = bars.iter().map(|b| b.close).fold(f64::MAX, f64::min);
+    let max_close = bars.iter().map(|b| b.close).fold(f64::MIN, f64::max);
+    // Add a small margin so the line doesn't hug the edges
+    let margin = (max_close - min_close) * 0.05;
+    let y_min = min_close - margin;
+    let y_max = max_close + margin;
 
-    let chart = BarChart::default()
+    let x_max = (bars.len() - 1) as f64;
+
+    // Date labels: first, middle, last bar
+    let date_label = |b: &QuoteBar| {
+        OffsetDateTime::from_unix_timestamp(b.timestamp)
+            .map(|dt| format!("{}/{}", dt.month() as u8, dt.day()))
+            .unwrap_or_default()
+    };
+    let x_labels = vec![
+        Span::raw(date_label(&bars[0])),
+        Span::raw(date_label(&bars[bars.len() / 2])),
+        Span::raw(date_label(bars.last().unwrap())),
+    ];
+
+    let dataset = Dataset::default()
+        .graph_type(GraphType::Line)
+        .style(Style::default().fg(Color::Cyan))
+        .data(&points);
+
+    let chart = Chart::new(vec![dataset])
         .block(
             Block::default()
                 .title(format!(" {ticker} — Close Price "))
                 .borders(Borders::ALL),
         )
-        .data(group)
-        .bar_width(3)
-        .bar_gap(1)
-        .max(max_val);
+        .x_axis(
+            Axis::default()
+                .bounds([0.0, x_max])
+                .labels(x_labels)
+                .style(Style::default().fg(Color::DarkGray)),
+        )
+        .y_axis(
+            Axis::default()
+                .bounds([y_min, y_max])
+                .labels(vec![
+                    Span::raw(format!("{y_min:.2}")),
+                    Span::raw(format!("{:.2}", (y_min + y_max) / 2.0)),
+                    Span::raw(format!("{y_max:.2}")),
+                ])
+                .style(Style::default().fg(Color::DarkGray)),
+        );
 
     frame.render_widget(chart, area);
 }

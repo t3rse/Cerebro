@@ -5,10 +5,9 @@ mod ui;
 
 use std::collections::HashMap;
 
-
 use crossterm::event::KeyCode;
-use time::{Duration, OffsetDateTime};
 use headset::{Headset, NewsCategory};
+use time::{Duration, OffsetDateTime};
 
 use rapid::Rapid;
 
@@ -16,8 +15,6 @@ use app::App;
 use event::{Event, EventHandler};
 use hodl::Hodl;
 use ydata::{MarketSnapshot, YData};
-
-
 
 const SCHWAB_JSON: &str = include_str!("../examples/schwab_portfolio.json");
 const ROBINHOOD_JSON: &str = include_str!("../examples/robinhood_portfolio.json");
@@ -109,9 +106,8 @@ async fn main() {
 
     let client = Hodl::new();
 
-//    let bdata = client.get_tickers(Some("BTCUSD-PERP")).await.unwrap();
-//    let candles = client.get_candlestick("BTC_USDT", Some("1h"), Some(24)).await.unwrap();
-
+    //    let bdata = client.get_tickers(Some("BTCUSD-PERP")).await.unwrap();
+    //    let candles = client.get_candlestick("BTC_USDT", Some("1h"), Some(24)).await.unwrap();
 
     let headset_client = match Headset::new() {
         Ok(c) => c,
@@ -135,17 +131,35 @@ async fn main() {
 
     let mut app = App::new();
 
-    let indices = MarketSnapshot::fetch(&client, vec!["^DJI", "^GSPC", "^RUT"], start, end).await.unwrap();
-    let sectors = MarketSnapshot::fetch(&client,
-                                        vec!["XLK", "XLV", "XLF", "XLY", "XLP", "XLE", "XLI", "XLB", "XLU", "XLRE", "XLC"], start, end).await.unwrap();
-    let commodities = MarketSnapshot::fetch(&client,
-                                            vec!["GC=F", "SI=F", "CL=F", "NG=F", "HG=F", "ZC=F", "ZS=F", "ZB=F", "ZN=F", "ZM=F", "ZT=F"], start, end).await.unwrap();
+    let indices = MarketSnapshot::fetch(&client, vec!["^DJI", "^GSPC", "^RUT"], start, end)
+        .await
+        .unwrap();
+    let sectors = MarketSnapshot::fetch(
+        &client,
+        vec![
+            "XLK", "XLV", "XLF", "XLY", "XLP", "XLE", "XLI", "XLB", "XLU", "XLRE", "XLC",
+        ],
+        start,
+        end,
+    )
+    .await
+    .unwrap();
+    let commodities = MarketSnapshot::fetch(
+        &client,
+        vec![
+            "GC=F", "SI=F", "CL=F", "NG=F", "HG=F", "ZC=F", "ZS=F", "ZB=F", "ZN=F", "ZM=F", "ZT=F",
+        ],
+        start,
+        end,
+    )
+    .await
+    .unwrap();
 
     app.market_snapshots.insert("Indices".to_string(), indices);
     app.market_snapshots.insert("Sectors".to_string(), sectors);
-    app.market_snapshots.insert("Commodities".to_string(), commodities);
+    app.market_snapshots
+        .insert("Commodities".to_string(), commodities);
     app.markets_row = vec![0; app.market_snapshots.len()];
-
 
     // Load portfolios from embedded JSON
     let schwab: portfolio::Portfolio =
@@ -206,7 +220,10 @@ async fn main() {
     app.loading = false;
 
     let mut terminal = ratatui::init();
-    let mut events = EventHandler::new(std::time::Duration::from_millis(250), std::time::Duration::from_millis(33));
+    let mut events = EventHandler::new(
+        std::time::Duration::from_millis(250),
+        std::time::Duration::from_millis(33),
+    );
 
     while !app.should_quit {
         match events.next().await {

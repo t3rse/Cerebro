@@ -11,7 +11,7 @@
 //! cargo test -p hodl -- --include-ignored
 //! ```
 
-use hodl::{HodlError, Hodl};
+use hodl::{Hodl, HodlError};
 
 // ── Unit tests (no network) ───────────────────────────────────────────────────
 
@@ -37,10 +37,16 @@ fn error_display_api() {
 #[ignore = "requires network access"]
 async fn get_instruments_returns_data() {
     let client = Hodl::new();
-    let instruments = client.get_instruments().await.expect("get_instruments failed");
+    let instruments = client
+        .get_instruments()
+        .await
+        .expect("get_instruments failed");
     assert!(!instruments.is_empty(), "expected at least one instrument");
     let btc = instruments.iter().find(|i| {
-        i.symbol.as_deref().map(|s| s.contains("BTC")).unwrap_or(false)
+        i.symbol
+            .as_deref()
+            .map(|s| s.contains("BTC"))
+            .unwrap_or(false)
     });
     assert!(btc.is_some(), "expected a BTC instrument");
 }
@@ -91,9 +97,18 @@ async fn get_trades_returns_trades() {
         .expect("get_trades failed");
     assert!(!trades.is_empty(), "expected trades");
     for t in &trades {
-        assert!(t.price.unwrap_or(0.0) > 0.0, "trade price should be positive");
-        assert!(t.quantity.unwrap_or(0.0) > 0.0, "trade quantity should be positive");
-        assert!(t.timestamp.unwrap_or(0) > 0, "trade timestamp should be positive");
+        assert!(
+            t.price.unwrap_or(0.0) > 0.0,
+            "trade price should be positive"
+        );
+        assert!(
+            t.quantity.unwrap_or(0.0) > 0.0,
+            "trade quantity should be positive"
+        );
+        assert!(
+            t.timestamp.unwrap_or(0) > 0,
+            "trade timestamp should be positive"
+        );
     }
 }
 
