@@ -243,12 +243,17 @@ impl Hodl {
             .await?
             .json()
             .await?;
-        let raw = env.into_result()?.data.into_iter().next().unwrap_or(RawBook {
-            depth: 0,
-            instrument_name: Some(instrument_name.to_string()),
-            asks: vec![],
-            bids: vec![],
-        });
+        let raw = env
+            .into_result()?
+            .data
+            .into_iter()
+            .next()
+            .unwrap_or(RawBook {
+                depth: 0,
+                instrument_name: Some(instrument_name.to_string()),
+                asks: vec![],
+                bids: vec![],
+            });
         Ok(OrderBook {
             depth: Some(raw.depth),
             instrument_name: raw.instrument_name,

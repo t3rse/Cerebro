@@ -4,16 +4,17 @@ mod portfolio;
 mod ui;
 
 use std::collections::HashMap;
-use std::time::Duration;
 
 use crossterm::event::KeyCode;
 use headset::{Headset, NewsCategory};
+use time::{Duration, OffsetDateTime};
 
 use rapid::Rapid;
 
 use app::App;
 use event::{Event, EventHandler};
 use hodl::Hodl;
+use ydata::{MarketSnapshot, YData};
 
 const SCHWAB_JSON: &str = include_str!("../examples/schwab_portfolio.json");
 const ROBINHOOD_JSON: &str = include_str!("../examples/robinhood_portfolio.json");
@@ -105,9 +106,8 @@ async fn main() {
 
     let client = Hodl::new();
 
-//    let bdata = client.get_tickers(Some("BTCUSD-PERP")).await.unwrap();
-//    let candles = client.get_candlestick("BTC_USDT", Some("1h"), Some(24)).await.unwrap();
-
+    //    let bdata = client.get_tickers(Some("BTCUSD-PERP")).await.unwrap();
+    //    let candles = client.get_candlestick("BTC_USDT", Some("1h"), Some(24)).await.unwrap();
 
     let headset_client = match Headset::new() {
         Ok(c) => c,
@@ -125,7 +125,41 @@ async fn main() {
         }
     };
 
+    let client = YData::new();
+    let end = OffsetDateTime::now_utc();
+    let start = end - Duration::days(30);
+
     let mut app = App::new();
+
+    let indices = MarketSnapshot::fetch(&client, vec!["^DJI", "^GSPC", "^RUT"], start, end)
+        .await
+        .unwrap();
+    let sectors = MarketSnapshot::fetch(
+        &client,
+        vec![
+            "XLK", "XLV", "XLF", "XLY", "XLP", "XLE", "XLI", "XLB", "XLU", "XLRE", "XLC",
+        ],
+        start,
+        end,
+    )
+    .await
+    .unwrap();
+    let commodities = MarketSnapshot::fetch(
+        &client,
+        vec![
+            "GC=F", "SI=F", "CL=F", "NG=F", "HG=F", "ZC=F", "ZS=F", "ZB=F", "ZN=F", "ZM=F", "ZT=F",
+        ],
+        start,
+        end,
+    )
+    .await
+    .unwrap();
+
+    app.market_snapshots.insert("Indices".to_string(), indices);
+    app.market_snapshots.insert("Sectors".to_string(), sectors);
+    app.market_snapshots
+        .insert("Commodities".to_string(), commodities);
+    app.markets_row = vec![0; app.market_snapshots.len()];
 
     // Load portfolios from embedded JSON
     let schwab: portfolio::Portfolio =
@@ -186,7 +220,10 @@ async fn main() {
     app.loading = false;
 
     let mut terminal = ratatui::init();
-    let mut events = EventHandler::new(Duration::from_millis(250), Duration::from_millis(33));
+    let mut events = EventHandler::new(
+        std::time::Duration::from_millis(250),
+        std::time::Duration::from_millis(33),
+    );
 
     while !app.should_quit {
         match events.next().await {
@@ -220,31 +257,35 @@ async fn main() {
                         KeyCode::Char('q') => app.should_quit = true,
                         KeyCode::Right => app.next_main_tab(),
                         KeyCode::Left => app.prev_main_tab(),
-                        KeyCode::Char(':') if app.main_tab == 2 => app.research_start_input(),
+                        KeyCode::Char(':') if app.main_tab == 3 => app.research_start_input(),
                         KeyCode::Char(']') => match app.main_tab {
-                            0 => app.next_tab(),
-                            1 => app.next_news_tab(),
-                            2 => app.next_research_sub_tab(),
+                            0 => app.markets_col_next(),
+                            1 => app.next_tab(),
+                            2 => app.next_news_tab(),
+                            3 => app.next_research_sub_tab(),
                             _ => {}
                         },
                         KeyCode::Char('[') => match app.main_tab {
-                            0 => app.prev_tab(),
-                            1 => app.prev_news_tab(),
-                            2 => app.prev_research_sub_tab(),
+                            0 => app.markets_col_prev(),
+                            1 => app.prev_tab(),
+                            2 => app.prev_news_tab(),
+                            3 => app.prev_research_sub_tab(),
                             _ => {}
                         },
                         KeyCode::Down => match app.main_tab {
-                            0 => app.focus_next(),
-                            1 => app.news_focus_next(),
-                            2 => app.research_focus_next(),
-                            3 => app.calendar_focus_next(),
+                            0 => app.markets_row_next(),
+                            1 => app.focus_next(),
+                            2 => app.news_focus_next(),
+                            3 => app.research_focus_next(),
+                            4 => app.calendar_focus_next(),
                             _ => {}
                         },
                         KeyCode::Up => match app.main_tab {
-                            0 => app.focus_prev(),
-                            1 => app.news_focus_prev(),
-                            2 => app.research_focus_prev(),
-                            3 => app.calendar_focus_prev(),
+                            0 => app.markets_row_prev(),
+                            1 => app.focus_prev(),
+                            2 => app.news_focus_prev(),
+                            3 => app.research_focus_prev(),
+                            4 => app.calendar_focus_prev(),
                             _ => {}
                         },
                         KeyCode::Enter => {
@@ -253,17 +294,17 @@ async fn main() {
                                 std::process::Command::new("open").arg(&url).spawn().ok();
                             }
                         }
-                        KeyCode::Char('o') if app.main_tab == 1 => {
+                        KeyCode::Char('o') if app.main_tab == 2 => {
                             if let Some(url) = app.focused_news_url() {
                                 std::process::Command::new("open").arg(url).spawn().ok();
                             }
                         }
-                        KeyCode::Char('o') if app.main_tab == 2 => {
+                        KeyCode::Char('o') if app.main_tab == 3 => {
                             if let Some(url) = app.focused_filing_url() {
                                 std::process::Command::new("open").arg(url).spawn().ok();
                             }
                         }
-                        KeyCode::Char('r') if app.main_tab == 1 => {
+                        KeyCode::Char('r') if app.main_tab == 2 => {
                             let tab = app.news_tab;
                             if let Ok(articles) = headset_client
                                 .market_news(news_tab_to_category(tab), None)
